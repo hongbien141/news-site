@@ -3,20 +3,20 @@ import { supabase } from "@/lib/supabase";
 import AdPopup from "../components/AdPopup";
 
 type PageProps = {
-  params: { slug: string }; // ❌ bỏ Promise
+  params: Promise<{ slug: string }>;
 };
 
 export default async function PostDetailPage({ params }: PageProps) {
-  const { slug } = params; // ❌ bỏ await
+  const { slug } = await params;
 
-  const { data: post } = await supabase
+  const { data: post, error } = await supabase
     .from("posts")
     .select("*")
     .eq("slug", slug)
     .eq("status", "published")
     .single();
 
-  if (!post) {
+  if (error || !post) {
     notFound();
   }
 
@@ -24,12 +24,12 @@ export default async function PostDetailPage({ params }: PageProps) {
     <main className="min-h-screen bg-[#f5f3ef] text-[#111]">
       {post.popup_link ? (
         <AdPopup
-  postSlug={post.slug}
-  adLink={post.popup_link}
-  adTitle={post.ad_title}
-  adDesc={post.ad_desc}
-  adImage={post.ad_image}
-/>
+          postSlug={post.slug}
+          adLink={post.popup_link}
+          adTitle={post.ad_title}
+          adDesc={post.ad_desc}
+          adImage={post.ad_image}
+        />
       ) : null}
 
       <div className="mx-auto max-w-4xl px-4 py-10 md:px-6">
@@ -50,19 +50,10 @@ export default async function PostDetailPage({ params }: PageProps) {
         <div className="mt-8 rounded-2xl bg-white p-5 shadow-sm">
           {post.video_url ? (
             <div className="mb-6">
-              {post.video_url.includes("youtube.com") ||
-              post.video_url.includes("youtu.be") ? (
-                <iframe
-                  src={convertYoutubeUrl(post.video_url)}
-                  className="aspect-video w-full rounded-xl"
-                  allowFullScreen
-                />
-              ) : (
-                <video controls className="w-full rounded-xl bg-black">
-  <source src={post.video_url} type="video/mp4" />
-  Trình duyệt của bạn không hỗ trợ video này.
-</video>
-              )}
+              <video controls className="w-full rounded-xl bg-black">
+                <source src={post.video_url} type="video/mp4" />
+                Trình duyệt của bạn không hỗ trợ video này.
+              </video>
             </div>
           ) : null}
 
@@ -81,14 +72,4 @@ export default async function PostDetailPage({ params }: PageProps) {
       </div>
     </main>
   );
-}
-
-function convertYoutubeUrl(url: string) {
-  const match = url.match(
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/
-  );
-
-  if (!match) return url;
-
-  return `https://www.youtube.com/embed/${match[1]}`;
 }
