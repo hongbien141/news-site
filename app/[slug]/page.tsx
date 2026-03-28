@@ -3,11 +3,11 @@ import { supabase } from "@/lib/supabase";
 import AdPopup from "../components/AdPopup";
 
 type PageProps = {
-  params: Promise<{ slug: string }>;
+  params: { slug: string }; // ❌ bỏ Promise
 };
 
 export default async function PostDetailPage({ params }: PageProps) {
-  const { slug } = await params;
+  const { slug } = params; // ❌ bỏ await
 
   const { data: post } = await supabase
     .from("posts")
