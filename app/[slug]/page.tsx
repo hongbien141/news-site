@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
 import { notFound } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import AdPopup from "../components/AdPopup";
@@ -7,6 +8,17 @@ import AdPopup from "../components/AdPopup";
 type PageProps = {
   params: Promise<{ slug: string }>;
 };
+
+function parseJsonArray(value: string | null): string[] {
+  if (!value) return [];
+
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
 export default async function PostDetailPage({ params }: PageProps) {
   const { slug } = await params;
@@ -21,6 +33,9 @@ export default async function PostDetailPage({ params }: PageProps) {
   if (error || !post) {
     notFound();
   }
+
+  const galleryImages = parseJsonArray(post.gallery_images);
+  const galleryVideos = parseJsonArray(post.gallery_videos);
 
   return (
     <main className="min-h-screen bg-[#f5f3ef] text-[#111]">
@@ -50,8 +65,33 @@ export default async function PostDetailPage({ params }: PageProps) {
         <div className="mt-6 border-t border-gray-300" />
 
         <div className="mt-8 rounded-2xl bg-white p-5 shadow-sm">
+          <div className="space-y-5 whitespace-pre-line text-lg leading-8 text-gray-800">
+            {post.content}
+          </div>
+
+          {post.cover_image ? (
+            <img
+              src={post.cover_image}
+              alt={post.title}
+              className="mt-8 w-full rounded-xl object-cover"
+            />
+          ) : null}
+
+          {galleryImages.length > 0 ? (
+            <div className="mt-8 space-y-4">
+              {galleryImages.map((image, index) => (
+                <img
+                  key={index}
+                  src={image}
+                  alt={`${post.title} ${index + 1}`}
+                  className="w-full rounded-xl object-cover"
+                />
+              ))}
+            </div>
+          ) : null}
+
           {post.video_url ? (
-            <div className="mb-6">
+            <div className="mt-8">
               <video controls className="w-full rounded-xl bg-black">
                 <source src={post.video_url} type="video/mp4" />
                 Trình duyệt của bạn không hỗ trợ video này.
@@ -59,17 +99,18 @@ export default async function PostDetailPage({ params }: PageProps) {
             </div>
           ) : null}
 
-          {post.cover_image ? (
-            <img
-              src={post.cover_image}
-              alt={post.title}
-              className="mb-6 w-full rounded-xl object-cover"
-            />
+          {galleryVideos.length > 0 ? (
+            <div className="mt-8 space-y-4">
+              {galleryVideos.map((video, index) => (
+                <video
+                  key={index}
+                  controls
+                  className="w-full rounded-xl bg-black"
+                  src={video}
+                />
+              ))}
+            </div>
           ) : null}
-
-          <div className="space-y-5 whitespace-pre-line text-lg leading-8 text-gray-800">
-            {post.content}
-          </div>
         </div>
       </div>
     </main>

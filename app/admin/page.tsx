@@ -17,6 +17,8 @@ type Post = {
   ad_title: string | null;
   ad_desc: string | null;
   ad_image: string | null;
+  gallery_images: string | null;
+  gallery_videos: string | null;
   created_at: string;
 };
 
@@ -29,6 +31,16 @@ const initialForm = {
   adTitle: "",
   adDesc: "",
 };
+
+function safeParseArray(value: string | null): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
 export default function AdminPage() {
   const [loading, setLoading] = useState(true);
@@ -47,13 +59,20 @@ export default function AdminPage() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [adImageFile, setAdImageFile] = useState<File | null>(null);
 
+  const [galleryImageFiles, setGalleryImageFiles] = useState<File[]>([]);
+  const [galleryVideoFiles, setGalleryVideoFiles] = useState<File[]>([]);
+
   const [existingCoverImage, setExistingCoverImage] = useState("");
   const [existingVideoUrl, setExistingVideoUrl] = useState("");
   const [existingAdImage, setExistingAdImage] = useState("");
+  const [existingGalleryImages, setExistingGalleryImages] = useState<string[]>([]);
+  const [existingGalleryVideos, setExistingGalleryVideos] = useState<string[]>([]);
 
   const [imagePreview, setImagePreview] = useState("");
   const [videoPreview, setVideoPreview] = useState("");
   const [adImagePreview, setAdImagePreview] = useState("");
+  const [galleryImagePreviews, setGalleryImagePreviews] = useState<string[]>([]);
+  const [galleryVideoPreviews, setGalleryVideoPreviews] = useState<string[]>([]);
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -77,10 +96,8 @@ export default function AdminPage() {
       setImagePreview("");
       return;
     }
-
     const objectUrl = URL.createObjectURL(imageFile);
     setImagePreview(objectUrl);
-
     return () => URL.revokeObjectURL(objectUrl);
   }, [imageFile]);
 
@@ -89,10 +106,8 @@ export default function AdminPage() {
       setVideoPreview("");
       return;
     }
-
     const objectUrl = URL.createObjectURL(videoFile);
     setVideoPreview(objectUrl);
-
     return () => URL.revokeObjectURL(objectUrl);
   }, [videoFile]);
 
@@ -101,12 +116,38 @@ export default function AdminPage() {
       setAdImagePreview("");
       return;
     }
-
     const objectUrl = URL.createObjectURL(adImageFile);
     setAdImagePreview(objectUrl);
-
     return () => URL.revokeObjectURL(objectUrl);
   }, [adImageFile]);
+
+  useEffect(() => {
+    if (galleryImageFiles.length === 0) {
+      setGalleryImagePreviews([]);
+      return;
+    }
+
+    const urls = galleryImageFiles.map((file) => URL.createObjectURL(file));
+    setGalleryImagePreviews(urls);
+
+    return () => {
+      urls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [galleryImageFiles]);
+
+  useEffect(() => {
+    if (galleryVideoFiles.length === 0) {
+      setGalleryVideoPreviews([]);
+      return;
+    }
+
+    const urls = galleryVideoFiles.map((file) => URL.createObjectURL(file));
+    setGalleryVideoPreviews(urls);
+
+    return () => {
+      urls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [galleryVideoFiles]);
 
   const isEditing = useMemo(() => editingId !== null, [editingId]);
 
@@ -160,13 +201,20 @@ export default function AdminPage() {
     setVideoFile(null);
     setAdImageFile(null);
 
+    setGalleryImageFiles([]);
+    setGalleryVideoFiles([]);
+
     setExistingCoverImage("");
     setExistingVideoUrl("");
     setExistingAdImage("");
+    setExistingGalleryImages([]);
+    setExistingGalleryVideos([]);
 
     setImagePreview("");
     setVideoPreview("");
     setAdImagePreview("");
+    setGalleryImagePreviews([]);
+    setGalleryVideoPreviews([]);
   }
 
   function slugify(text: string) {
@@ -204,6 +252,23 @@ export default function AdminPage() {
     return data.publicUrl;
   }
 
+  async function uploadMultipleFiles(
+    bucket: "images" | "videos",
+    files: File[],
+    folder = "posts"
+  ) {
+    if (files.length === 0) return [];
+
+    const results: string[] = [];
+
+    for (const file of files) {
+      const url = await uploadFile(bucket, file, folder);
+      results.push(url);
+    }
+
+    return results;
+  }
+
   async function uploadImageIfNeeded() {
     if (!imageFile) return existingCoverImage || null;
     return uploadFile("images", imageFile, "posts");
@@ -233,11 +298,29 @@ export default function AdminPage() {
     setSubmitting(true);
 
     try {
-      const [coverImageUrl, videoUrl, adImageUrl] = await Promise.all([
+      const [
+        coverImageUrl,
+        videoUrl,
+        adImageUrl,
+        uploadedGalleryImages,
+        uploadedGalleryVideos,
+      ] = await Promise.all([
         uploadImageIfNeeded(),
         uploadVideoIfNeeded(),
         uploadAdImageIfNeeded(),
+        uploadMultipleFiles("images", galleryImageFiles, "gallery-images"),
+        uploadMultipleFiles("videos", galleryVideoFiles, "gallery-videos"),
       ]);
+
+      const finalGalleryImages =
+        uploadedGalleryImages.length > 0
+          ? uploadedGalleryImages
+          : existingGalleryImages;
+
+      const finalGalleryVideos =
+        uploadedGalleryVideos.length > 0
+          ? uploadedGalleryVideos
+          : existingGalleryVideos;
 
       const payload = {
         title: form.title.trim(),
@@ -250,6 +333,8 @@ export default function AdminPage() {
         ad_title: form.adTitle.trim() || null,
         ad_desc: form.adDesc.trim() || null,
         ad_image: adImageUrl,
+        gallery_images: JSON.stringify(finalGalleryImages),
+        gallery_videos: JSON.stringify(finalGalleryVideos),
       };
 
       if (isEditing && editingId !== null) {
@@ -295,14 +380,20 @@ export default function AdminPage() {
     setExistingCoverImage(post.cover_image ?? "");
     setExistingVideoUrl(post.video_url ?? "");
     setExistingAdImage(post.ad_image ?? "");
+    setExistingGalleryImages(safeParseArray(post.gallery_images));
+    setExistingGalleryVideos(safeParseArray(post.gallery_videos));
 
     setImageFile(null);
     setVideoFile(null);
     setAdImageFile(null);
+    setGalleryImageFiles([]);
+    setGalleryVideoFiles([]);
 
     setImagePreview("");
     setVideoPreview("");
     setAdImagePreview("");
+    setGalleryImagePreviews([]);
+    setGalleryVideoPreviews([]);
 
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -364,7 +455,7 @@ export default function AdminPage() {
 
   return (
     <main className="min-h-screen bg-[#f5f3ef] p-6 md:p-10">
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-7xl">
         <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-sm font-bold uppercase tracking-[0.2em] text-red-500">
@@ -473,9 +564,7 @@ export default function AdminPage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium">
-                  Trạng thái
-                </label>
+                <label className="mb-2 block text-sm font-medium">Trạng thái</label>
                 <select
                   className="w-full rounded border p-3"
                   value={form.status}
@@ -546,7 +635,47 @@ export default function AdminPage() {
 
               <div>
                 <label className="mb-2 block text-sm font-medium">
-                  Video từ máy tính
+                  Ảnh nội dung (chọn nhiều ảnh)
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files ?? []);
+                    setGalleryImageFiles(files);
+                  }}
+                  className="w-full"
+                />
+
+                {galleryImagePreviews.length > 0 ? (
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    {galleryImagePreviews.map((src, index) => (
+                      <img
+                        key={index}
+                        src={src}
+                        alt={`Preview ảnh nội dung ${index + 1}`}
+                        className="h-40 w-full rounded-xl object-cover"
+                      />
+                    ))}
+                  </div>
+                ) : existingGalleryImages.length > 0 ? (
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    {existingGalleryImages.map((src, index) => (
+                      <img
+                        key={index}
+                        src={src}
+                        alt={`Ảnh nội dung ${index + 1}`}
+                        className="h-40 w-full rounded-xl object-cover"
+                      />
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium">
+                  Video chính từ máy tính
                 </label>
                 <input
                   type="file"
@@ -570,6 +699,46 @@ export default function AdminPage() {
                     className="mt-3 w-full rounded-xl bg-black"
                     src={existingVideoUrl}
                   />
+                ) : null}
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium">
+                  Video nội dung (chọn nhiều video)
+                </label>
+                <input
+                  type="file"
+                  accept="video/mp4,video/webm,video/ogg"
+                  multiple
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files ?? []);
+                    setGalleryVideoFiles(files);
+                  }}
+                  className="w-full"
+                />
+
+                {galleryVideoPreviews.length > 0 ? (
+                  <div className="mt-3 space-y-3">
+                    {galleryVideoPreviews.map((src, index) => (
+                      <video
+                        key={index}
+                        controls
+                        className="w-full rounded-xl bg-black"
+                        src={src}
+                      />
+                    ))}
+                  </div>
+                ) : existingGalleryVideos.length > 0 ? (
+                  <div className="mt-3 space-y-3">
+                    {existingGalleryVideos.map((src, index) => (
+                      <video
+                        key={index}
+                        controls
+                        className="w-full rounded-xl bg-black"
+                        src={src}
+                      />
+                    ))}
+                  </div>
                 ) : null}
               </div>
 
