@@ -484,6 +484,7 @@ export default function AdminPage() {
               </div>
               <h1 className="mt-4 text-4xl font-extrabold tracking-tight text-gray-900 md:text-5xl">
                 CMS đăng bài
+                <p className="text-red-500 font-bold">ADMIN VERSION FIX 1</p>
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-gray-500">
                 Tạo bài viết, thêm nhiều hình ảnh, nhiều video và popup quảng cáo theo giao diện đơn giản.
