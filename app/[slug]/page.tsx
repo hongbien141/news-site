@@ -34,8 +34,8 @@ export default async function PostDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const galleryImages = parseJsonArray(post.gallery_images);
-  const galleryVideos = parseJsonArray(post.gallery_videos);
+  const images = parseJsonArray(post.images);
+  const videos = parseJsonArray(post.videos);
 
   return (
     <main className="min-h-screen bg-[#f5f3ef] text-[#111]">
@@ -69,17 +69,9 @@ export default async function PostDetailPage({ params }: PageProps) {
             {post.content}
           </div>
 
-          {post.cover_image ? (
-            <img
-              src={post.cover_image}
-              alt={post.title}
-              className="mt-8 w-full rounded-xl object-cover"
-            />
-          ) : null}
-
-          {galleryImages.length > 0 ? (
+          {images.length > 0 ? (
             <div className="mt-8 space-y-4">
-              {galleryImages.map((image, index) => (
+              {images.map((image, index) => (
                 <img
                   key={index}
                   src={image}
@@ -90,18 +82,9 @@ export default async function PostDetailPage({ params }: PageProps) {
             </div>
           ) : null}
 
-          {post.video_url ? (
-            <div className="mt-8">
-              <video controls className="w-full rounded-xl bg-black">
-                <source src={post.video_url} type="video/mp4" />
-                Trình duyệt của bạn không hỗ trợ video này.
-              </video>
-            </div>
-          ) : null}
-
-          {galleryVideos.length > 0 ? (
+          {videos.length > 0 ? (
             <div className="mt-8 space-y-4">
-              {galleryVideos.map((video, index) => (
+              {videos.map((video, index) => (
                 <video
                   key={index}
                   controls

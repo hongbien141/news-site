@@ -10,16 +10,20 @@ type Post = {
   title: string;
   slug: string;
   content: string | null;
-  video_url: string | null;
   popup_link: string | null;
-  cover_image: string | null;
   status: string | null;
   ad_title: string | null;
   ad_desc: string | null;
   ad_image: string | null;
-  gallery_images: string | null;
-  gallery_videos: string | null;
+  images: string | null;
+  videos: string | null;
   created_at: string;
+};
+
+type MediaItem = {
+  file: File | null;
+  preview: string;
+  existingUrl?: string;
 };
 
 const initialForm = {
@@ -55,26 +59,16 @@ export default function AdminPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState(initialForm);
 
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [videoFile, setVideoFile] = useState<File | null>(null);
   const [adImageFile, setAdImageFile] = useState<File | null>(null);
-
-  const [galleryImageFiles, setGalleryImageFiles] = useState<File[]>([]);
-  const [galleryVideoFiles, setGalleryVideoFiles] = useState<File[]>([]);
-
-  const [existingCoverImage, setExistingCoverImage] = useState("");
-  const [existingVideoUrl, setExistingVideoUrl] = useState("");
-  const [existingAdImage, setExistingAdImage] = useState("");
-  const [existingGalleryImages, setExistingGalleryImages] = useState<string[]>([]);
-  const [existingGalleryVideos, setExistingGalleryVideos] = useState<string[]>([]);
-
-  const [imagePreview, setImagePreview] = useState("");
-  const [videoPreview, setVideoPreview] = useState("");
   const [adImagePreview, setAdImagePreview] = useState("");
-  const [galleryImagePreviews, setGalleryImagePreviews] = useState<string[]>([]);
-  const [galleryVideoPreviews, setGalleryVideoPreviews] = useState<string[]>([]);
+  const [existingAdImage, setExistingAdImage] = useState("");
+
+  const [images, setImages] = useState<MediaItem[]>([{ file: null, preview: "" }]);
+  const [videos, setVideos] = useState<MediaItem[]>([{ file: null, preview: "" }]);
 
   const [submitting, setSubmitting] = useState(false);
+
+  const isEditing = useMemo(() => editingId !== null, [editingId]);
 
   useEffect(() => {
     const checkSession = async () => {
@@ -92,64 +86,16 @@ export default function AdminPage() {
   }, [isLoggedIn]);
 
   useEffect(() => {
-    if (!imageFile) {
-      setImagePreview("");
-      return;
-    }
-    const objectUrl = URL.createObjectURL(imageFile);
-    setImagePreview(objectUrl);
-    return () => URL.revokeObjectURL(objectUrl);
-  }, [imageFile]);
-
-  useEffect(() => {
-    if (!videoFile) {
-      setVideoPreview("");
-      return;
-    }
-    const objectUrl = URL.createObjectURL(videoFile);
-    setVideoPreview(objectUrl);
-    return () => URL.revokeObjectURL(objectUrl);
-  }, [videoFile]);
-
-  useEffect(() => {
     if (!adImageFile) {
       setAdImagePreview("");
       return;
     }
+
     const objectUrl = URL.createObjectURL(adImageFile);
     setAdImagePreview(objectUrl);
+
     return () => URL.revokeObjectURL(objectUrl);
   }, [adImageFile]);
-
-  useEffect(() => {
-    if (galleryImageFiles.length === 0) {
-      setGalleryImagePreviews([]);
-      return;
-    }
-
-    const urls = galleryImageFiles.map((file) => URL.createObjectURL(file));
-    setGalleryImagePreviews(urls);
-
-    return () => {
-      urls.forEach((url) => URL.revokeObjectURL(url));
-    };
-  }, [galleryImageFiles]);
-
-  useEffect(() => {
-    if (galleryVideoFiles.length === 0) {
-      setGalleryVideoPreviews([]);
-      return;
-    }
-
-    const urls = galleryVideoFiles.map((file) => URL.createObjectURL(file));
-    setGalleryVideoPreviews(urls);
-
-    return () => {
-      urls.forEach((url) => URL.revokeObjectURL(url));
-    };
-  }, [galleryVideoFiles]);
-
-  const isEditing = useMemo(() => editingId !== null, [editingId]);
 
   async function fetchPosts() {
     setFetchingPosts(true);
@@ -193,30 +139,6 @@ export default function AdminPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function resetForm() {
-    setEditingId(null);
-    setForm(initialForm);
-
-    setImageFile(null);
-    setVideoFile(null);
-    setAdImageFile(null);
-
-    setGalleryImageFiles([]);
-    setGalleryVideoFiles([]);
-
-    setExistingCoverImage("");
-    setExistingVideoUrl("");
-    setExistingAdImage("");
-    setExistingGalleryImages([]);
-    setExistingGalleryVideos([]);
-
-    setImagePreview("");
-    setVideoPreview("");
-    setAdImagePreview("");
-    setGalleryImagePreviews([]);
-    setGalleryVideoPreviews([]);
-  }
-
   function slugify(text: string) {
     return text
       .toLowerCase()
@@ -225,6 +147,18 @@ export default function AdminPage() {
       .replace(/đ/g, "d")
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
+  }
+
+  function resetForm() {
+    setEditingId(null);
+    setForm(initialForm);
+
+    setAdImageFile(null);
+    setAdImagePreview("");
+    setExistingAdImage("");
+
+    setImages([{ file: null, preview: "" }]);
+    setVideos([{ file: null, preview: "" }]);
   }
 
   async function uploadFile(
@@ -263,36 +197,98 @@ export default function AdminPage() {
     return data.publicUrl;
   }
 
-  async function uploadMultipleFiles(
-    bucket: "images" | "videos",
-    files: File[],
-    folder = "posts"
-  ) {
-    if (files.length === 0) return [];
+  async function uploadAdImageIfNeeded() {
+    if (!adImageFile) return existingAdImage || null;
+    return uploadFile("images", adImageFile, "ads");
+  }
 
+  async function uploadMediaItems(
+    bucket: "images" | "videos",
+    items: MediaItem[],
+    folder: string
+  ) {
     const results: string[] = [];
 
-    for (const file of files) {
-      const url = await uploadFile(bucket, file, folder);
-      results.push(url);
+    for (const item of items) {
+      if (item.file) {
+        const url = await uploadFile(bucket, item.file, folder);
+        results.push(url);
+      } else if (item.existingUrl) {
+        results.push(item.existingUrl);
+      }
     }
 
     return results;
   }
 
-  async function uploadImageIfNeeded() {
-    if (!imageFile) return existingCoverImage || null;
-    return uploadFile("images", imageFile, "posts");
+  function updateImageFile(index: number, file: File | null) {
+    setImages((prev) => {
+      const next = [...prev];
+
+      if (next[index]?.preview && next[index].preview.startsWith("blob:")) {
+        URL.revokeObjectURL(next[index].preview);
+      }
+
+      next[index] = {
+        ...next[index],
+        file,
+        preview: file ? URL.createObjectURL(file) : "",
+        existingUrl: file ? undefined : next[index]?.existingUrl,
+      };
+
+      return next;
+    });
   }
 
-  async function uploadVideoIfNeeded() {
-    if (!videoFile) return existingVideoUrl || null;
-    return uploadFile("videos", videoFile, "posts");
+  function updateVideoFile(index: number, file: File | null) {
+    setVideos((prev) => {
+      const next = [...prev];
+
+      if (next[index]?.preview && next[index].preview.startsWith("blob:")) {
+        URL.revokeObjectURL(next[index].preview);
+      }
+
+      next[index] = {
+        ...next[index],
+        file,
+        preview: file ? URL.createObjectURL(file) : "",
+        existingUrl: file ? undefined : next[index]?.existingUrl,
+      };
+
+      return next;
+    });
   }
 
-  async function uploadAdImageIfNeeded() {
-    if (!adImageFile) return existingAdImage || null;
-    return uploadFile("images", adImageFile, "ads");
+  function addImageItem() {
+    setImages((prev) => [...prev, { file: null, preview: "" }]);
+  }
+
+  function addVideoItem() {
+    setVideos((prev) => [...prev, { file: null, preview: "" }]);
+  }
+
+  function removeImageItem(index: number) {
+    setImages((prev) => {
+      const item = prev[index];
+      if (item?.preview && item.preview.startsWith("blob:")) {
+        URL.revokeObjectURL(item.preview);
+      }
+
+      const next = prev.filter((_, i) => i !== index);
+      return next.length > 0 ? next : [{ file: null, preview: "" }];
+    });
+  }
+
+  function removeVideoItem(index: number) {
+    setVideos((prev) => {
+      const item = prev[index];
+      if (item?.preview && item.preview.startsWith("blob:")) {
+        URL.revokeObjectURL(item.preview);
+      }
+
+      const next = prev.filter((_, i) => i !== index);
+      return next.length > 0 ? next : [{ file: null, preview: "" }];
+    });
   }
 
   async function handleSubmit() {
@@ -309,43 +305,23 @@ export default function AdminPage() {
     setSubmitting(true);
 
     try {
-      const [
-        coverImageUrl,
-        videoUrl,
-        adImageUrl,
-        uploadedGalleryImages,
-        uploadedGalleryVideos,
-      ] = await Promise.all([
-        uploadImageIfNeeded(),
-        uploadVideoIfNeeded(),
+      const [adImageUrl, uploadedImages, uploadedVideos] = await Promise.all([
         uploadAdImageIfNeeded(),
-        uploadMultipleFiles("images", galleryImageFiles, "gallery-images"),
-        uploadMultipleFiles("videos", galleryVideoFiles, "gallery-videos"),
+        uploadMediaItems("images", images, "post-images"),
+        uploadMediaItems("videos", videos, "post-videos"),
       ]);
-
-      const finalGalleryImages =
-        uploadedGalleryImages.length > 0
-          ? uploadedGalleryImages
-          : existingGalleryImages;
-
-      const finalGalleryVideos =
-        uploadedGalleryVideos.length > 0
-          ? uploadedGalleryVideos
-          : existingGalleryVideos;
 
       const payload = {
         title: form.title.trim(),
         slug: form.slug.trim(),
         content: form.content.trim(),
         popup_link: form.popupLink.trim() || null,
-        cover_image: coverImageUrl,
-        video_url: videoUrl,
         status: form.status,
         ad_title: form.adTitle.trim() || null,
         ad_desc: form.adDesc.trim() || null,
         ad_image: adImageUrl,
-        gallery_images: JSON.stringify(finalGalleryImages),
-        gallery_videos: JSON.stringify(finalGalleryVideos),
+        images: JSON.stringify(uploadedImages),
+        videos: JSON.stringify(uploadedVideos),
       };
 
       if (isEditing && editingId !== null) {
@@ -388,23 +364,32 @@ export default function AdminPage() {
       adDesc: post.ad_desc ?? "",
     });
 
-    setExistingCoverImage(post.cover_image ?? "");
-    setExistingVideoUrl(post.video_url ?? "");
     setExistingAdImage(post.ad_image ?? "");
-    setExistingGalleryImages(safeParseArray(post.gallery_images));
-    setExistingGalleryVideos(safeParseArray(post.gallery_videos));
-
-    setImageFile(null);
-    setVideoFile(null);
     setAdImageFile(null);
-    setGalleryImageFiles([]);
-    setGalleryVideoFiles([]);
-
-    setImagePreview("");
-    setVideoPreview("");
     setAdImagePreview("");
-    setGalleryImagePreviews([]);
-    setGalleryVideoPreviews([]);
+
+    const parsedImages = safeParseArray(post.images);
+    const parsedVideos = safeParseArray(post.videos);
+
+    setImages(
+      parsedImages.length > 0
+        ? parsedImages.map((url) => ({
+            file: null,
+            preview: url,
+            existingUrl: url,
+          }))
+        : [{ file: null, preview: "" }]
+    );
+
+    setVideos(
+      parsedVideos.length > 0
+        ? parsedVideos.map((url) => ({
+            file: null,
+            preview: url,
+            existingUrl: url,
+          }))
+        : [{ file: null, preview: "" }]
+    );
 
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -428,21 +413,6 @@ export default function AdminPage() {
     alert("Đã xóa bài");
   }
 
-  function SectionTitle({
-    title,
-    desc,
-  }: {
-    title: string;
-    desc?: string;
-  }) {
-    return (
-      <div className="mb-5">
-        <h2 className="text-2xl font-extrabold text-gray-900">{title}</h2>
-        {desc ? <p className="mt-1 text-sm text-gray-500">{desc}</p> : null}
-      </div>
-    );
-  }
-
   function Card({
     children,
     className = "",
@@ -451,43 +421,20 @@ export default function AdminPage() {
     className?: string;
   }) {
     return (
-      <section
-        className={`rounded-3xl border border-gray-200 bg-white p-6 shadow-sm ${className}`}
-      >
+      <section className={`rounded-3xl border border-gray-200 bg-white p-6 shadow-sm ${className}`}>
         {children}
       </section>
     );
   }
 
-  function Field({
-    label,
-    required,
-    hint,
-    children,
-  }: {
-    label: string;
-    required?: boolean;
-    hint?: string;
-    children: React.ReactNode;
-  }) {
-    return (
-      <div>
-        <label className="mb-2 block text-sm font-semibold text-gray-800">
-          {label}
-          {required ? <span className="ml-1 text-red-500">*</span> : null}
-          {hint ? <span className="ml-2 text-xs font-normal text-gray-400">{hint}</span> : null}
-        </label>
-        {children}
-      </div>
-    );
-  }
-
   const inputClass =
     "w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none transition focus:border-red-300 focus:bg-white";
+
   const textareaClass =
-    "min-h-[140px] w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none transition focus:border-red-300 focus:bg-white";
-  const fileBoxClass =
-    "rounded-2xl border border-dashed border-gray-300 bg-gray-50 px-4 py-4";
+    "min-h-[200px] w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none transition focus:border-red-300 focus:bg-white";
+
+  const blockClass =
+    "rounded-2xl border border-gray-200 bg-gray-50 p-4";
 
   if (loading) {
     return <main className="p-10">Đang tải...</main>;
@@ -504,35 +451,28 @@ export default function AdminPage() {
             <h1 className="mt-4 text-4xl font-extrabold tracking-tight text-gray-900">
               Đăng nhập CMS
             </h1>
-            <p className="mt-2 text-sm text-gray-500">
-              Quản lý bài viết, ảnh, video và popup quảng cáo.
-            </p>
           </div>
 
           <Card>
             <div className="space-y-4">
-              <Field label="Email" required>
-                <input
-                  className={inputClass}
-                  placeholder="Nhập email admin"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </Field>
+              <input
+                placeholder="Email"
+                className={inputClass}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
 
-              <Field label="Mật khẩu" required>
-                <input
-                  type="password"
-                  className={inputClass}
-                  placeholder="Nhập mật khẩu"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </Field>
+              <input
+                type="password"
+                placeholder="Mật khẩu"
+                className={inputClass}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
 
               <button
                 onClick={handleLogin}
-                className="w-full rounded-2xl bg-black px-5 py-3 font-semibold text-white transition hover:opacity-90"
+                className="w-full rounded-2xl bg-black py-3 font-semibold text-white"
               >
                 Đăng nhập
               </button>
@@ -550,14 +490,13 @@ export default function AdminPage() {
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
               <div className="inline-flex rounded-full bg-red-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.22em] text-red-500">
-                Công cụ quản trị
+                Admin
               </div>
               <h1 className="mt-4 text-4xl font-extrabold tracking-tight text-gray-900 md:text-5xl">
-                Tạo bài viết nhanh ⚡
+                CMS đăng bài
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-gray-500">
-                Điền thông tin bài viết, thêm ảnh, thêm video, cấu hình popup quảng cáo
-                rồi đăng ngay trên website.
+                Tạo bài viết, thêm nhiều hình ảnh, nhiều video và popup quảng cáo theo giao diện đơn giản.
               </p>
             </div>
 
@@ -570,26 +509,34 @@ export default function AdminPage() {
           </div>
         </header>
 
-        <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+        <div className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
           <div className="space-y-6">
             <Card>
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <SectionTitle
-                  title={isEditing ? "Chỉnh sửa bài viết" : "Thông tin bài viết"}
-                  desc="Nhập tiêu đề, slug, nội dung và trạng thái bài viết."
-                />
+              <div className="mb-5 flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-extrabold text-gray-900">
+                    {isEditing ? "Sửa bài viết" : "Thông tin bài viết"}
+                  </h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Nhập tiêu đề, slug, nội dung và trạng thái bài viết.
+                  </p>
+                </div>
+
                 {isEditing ? (
                   <button
                     onClick={resetForm}
-                    className="h-fit rounded-2xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700"
+                    className="rounded-2xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700"
                   >
                     Tạo bài mới
                   </button>
                 ) : null}
               </div>
 
-              <div className="grid gap-4">
-                <Field label="Tiêu đề bài viết" required>
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-800">
+                    Tiêu đề
+                  </label>
                   <input
                     className={inputClass}
                     value={form.title}
@@ -599,25 +546,27 @@ export default function AdminPage() {
                         updateForm("slug", slugify(form.title));
                       }
                     }}
-                    placeholder="VD: Người hùng giữa đời thường"
+                    placeholder="Nhập tiêu đề bài"
                   />
-                </Field>
+                </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
-                  <Field
-                    label="Slug"
-                    required
-                    hint="không dấu, dùng cho link bài viết"
-                  >
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-gray-800">
+                      Slug
+                    </label>
                     <input
                       className={inputClass}
                       value={form.slug}
                       onChange={(e) => updateForm("slug", slugify(e.target.value))}
-                      placeholder="nguoi-hung-giua-doi-thuong"
+                      placeholder="vi-du-bai-viet"
                     />
-                  </Field>
+                  </div>
 
-                  <Field label="Trạng thái" required>
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-gray-800">
+                      Trạng thái
+                    </label>
                     <select
                       className={inputClass}
                       value={form.status}
@@ -626,218 +575,191 @@ export default function AdminPage() {
                       <option value="draft">draft</option>
                       <option value="published">published</option>
                     </select>
-                  </Field>
+                  </div>
                 </div>
 
-                <Field label="Nội dung bài viết" required hint="nội dung sẽ hiển thị trước ảnh và video">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-800">
+                    Nội dung
+                  </label>
                   <textarea
-                    className={`${textareaClass} min-h-[240px]`}
+                    className={textareaClass}
                     value={form.content}
                     onChange={(e) => updateForm("content", e.target.value)}
-                    placeholder="Nhập nội dung bài viết..."
+                    placeholder="Nhập nội dung bài viết"
                   />
-                </Field>
+                </div>
               </div>
             </Card>
 
             <Card>
-              <SectionTitle
-                title="Hình ảnh bài viết"
-                desc="Ảnh cover dùng cho trang chủ, ảnh nội dung dùng trong bài."
-              />
-
-              <div className="space-y-6">
-                <Field label="Ảnh cover từ máy tính">
-                  <div className={fileBoxClass}>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0] ?? null;
-                        setImageFile(file);
-                      }}
-                      className="w-full"
-                    />
-                  </div>
-
-                  {imagePreview ? (
-                    <img
-                      src={imagePreview}
-                      alt="Preview ảnh cover"
-                      className="mt-4 h-56 w-full rounded-2xl object-cover"
-                    />
-                  ) : existingCoverImage ? (
-                    <img
-                      src={existingCoverImage}
-                      alt="Ảnh cover hiện tại"
-                      className="mt-4 h-56 w-full rounded-2xl object-cover"
-                    />
-                  ) : null}
-                </Field>
-
-                <Field label="Ảnh nội dung" hint="có thể chọn nhiều ảnh cùng lúc">
-                  <div className={fileBoxClass}>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={(e) => {
-                        const files = Array.from(e.target.files ?? []);
-                        setGalleryImageFiles(files);
-                      }}
-                      className="w-full"
-                    />
-                  </div>
-
-                  {galleryImagePreviews.length > 0 ? (
-                    <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3">
-                      {galleryImagePreviews.map((src, index) => (
-                        <img
-                          key={index}
-                          src={src}
-                          alt={`Preview ảnh nội dung ${index + 1}`}
-                          className="h-40 w-full rounded-2xl object-cover"
-                        />
-                      ))}
-                    </div>
-                  ) : existingGalleryImages.length > 0 ? (
-                    <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3">
-                      {existingGalleryImages.map((src, index) => (
-                        <img
-                          key={index}
-                          src={src}
-                          alt={`Ảnh nội dung ${index + 1}`}
-                          className="h-40 w-full rounded-2xl object-cover"
-                        />
-                      ))}
-                    </div>
-                  ) : null}
-                </Field>
+              <div className="mb-5">
+                <p className="text-sm font-bold uppercase tracking-[0.2em] text-red-500">
+                  Hình ảnh
+                </p>
               </div>
-            </Card>
-
-            <Card>
-              <SectionTitle
-                title="Video bài viết"
-                desc="Video chính hiển thị trước, các video nội dung hiển thị phía dưới."
-              />
-
-              <div className="space-y-6">
-                <Field label="Video chính">
-                  <div className={fileBoxClass}>
-                    <input
-                      type="file"
-                      accept="video/mp4,video/webm,video/ogg"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0] ?? null;
-                        setVideoFile(file);
-                      }}
-                      className="w-full"
-                    />
-                  </div>
-
-                  {videoPreview ? (
-                    <video
-                      controls
-                      className="mt-4 w-full rounded-2xl bg-black"
-                      src={videoPreview}
-                    />
-                  ) : existingVideoUrl ? (
-                    <video
-                      controls
-                      className="mt-4 w-full rounded-2xl bg-black"
-                      src={existingVideoUrl}
-                    />
-                  ) : null}
-                </Field>
-
-                <Field label="Video nội dung" hint="có thể chọn nhiều video cùng lúc">
-                  <div className={fileBoxClass}>
-                    <input
-                      type="file"
-                      accept="video/mp4,video/webm,video/ogg"
-                      multiple
-                      onChange={(e) => {
-                        const files = Array.from(e.target.files ?? []);
-                        setGalleryVideoFiles(files);
-                      }}
-                      className="w-full"
-                    />
-                  </div>
-
-                  {galleryVideoPreviews.length > 0 ? (
-                    <div className="mt-4 space-y-4">
-                      {galleryVideoPreviews.map((src, index) => (
-                        <video
-                          key={index}
-                          controls
-                          className="w-full rounded-2xl bg-black"
-                          src={src}
-                        />
-                      ))}
-                    </div>
-                  ) : existingGalleryVideos.length > 0 ? (
-                    <div className="mt-4 space-y-4">
-                      {existingGalleryVideos.map((src, index) => (
-                        <video
-                          key={index}
-                          controls
-                          className="w-full rounded-2xl bg-black"
-                          src={src}
-                        />
-                      ))}
-                    </div>
-                  ) : null}
-                </Field>
-              </div>
-            </Card>
-
-            <Card>
-              <SectionTitle
-                title="Popup quảng cáo"
-                desc="Thiết lập link, tiêu đề, mô tả và ảnh popup quảng cáo."
-              />
 
               <div className="space-y-4">
-                <Field label="Link popup quảng cáo">
+                {images.map((item, index) => (
+                  <div key={index} className={blockClass}>
+                    <div className="mb-3 flex items-center justify-between">
+                      <h3 className="text-lg font-bold text-red-500">
+                        HÌNH ẢNH {index + 1}
+                      </h3>
+
+                      <button
+                        type="button"
+                        onClick={() => removeImageItem(index)}
+                        className="text-lg text-gray-500"
+                      >
+                        × Xóa
+                      </button>
+                    </div>
+
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] ?? null;
+                        updateImageFile(index, file);
+                      }}
+                      className="w-full"
+                    />
+
+                    {item.preview ? (
+                      <img
+                        src={item.preview}
+                        alt={`Hình ảnh ${index + 1}`}
+                        className="mt-4 h-56 w-full rounded-2xl object-cover"
+                      />
+                    ) : null}
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={addImageItem}
+                  className="w-full rounded-2xl border border-dashed border-red-300 px-4 py-4 text-lg font-semibold text-red-500"
+                >
+                  + Thêm hình ảnh
+                </button>
+              </div>
+            </Card>
+
+            <Card>
+              <div className="mb-5">
+                <p className="text-sm font-bold uppercase tracking-[0.2em] text-red-500">
+                  Video
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                {videos.map((item, index) => (
+                  <div key={index} className={blockClass}>
+                    <div className="mb-3 flex items-center justify-between">
+                      <h3 className="text-lg font-bold text-red-500">
+                        VIDEO {index + 1}
+                      </h3>
+
+                      <button
+                        type="button"
+                        onClick={() => removeVideoItem(index)}
+                        className="text-lg text-gray-500"
+                      >
+                        × Xóa
+                      </button>
+                    </div>
+
+                    <input
+                      type="file"
+                      accept="video/mp4,video/webm,video/ogg"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] ?? null;
+                        updateVideoFile(index, file);
+                      }}
+                      className="w-full"
+                    />
+
+                    {item.preview ? (
+                      <video
+                        controls
+                        className="mt-4 w-full rounded-2xl bg-black"
+                        src={item.preview}
+                      />
+                    ) : null}
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={addVideoItem}
+                  className="w-full rounded-2xl border border-dashed border-red-300 px-4 py-4 text-lg font-semibold text-red-500"
+                >
+                  + Thêm video
+                </button>
+              </div>
+            </Card>
+
+            <Card>
+              <div className="mb-5">
+                <h2 className="text-2xl font-extrabold text-gray-900">
+                  Popup quảng cáo
+                </h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  Thiết lập link, tiêu đề, mô tả và ảnh popup quảng cáo.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-800">
+                    Link popup quảng cáo
+                  </label>
                   <input
                     className={inputClass}
                     value={form.popupLink}
                     onChange={(e) => updateForm("popupLink", e.target.value)}
                     placeholder="https://s.shopee.vn/..."
                   />
-                </Field>
+                </div>
 
-                <Field label="Tiêu đề popup quảng cáo">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-800">
+                    Tiêu đề popup quảng cáo
+                  </label>
                   <input
                     className={inputClass}
                     value={form.adTitle}
                     onChange={(e) => updateForm("adTitle", e.target.value)}
-                    placeholder="VD: Kem đánh răng trắng răng"
+                    placeholder="Nhập tiêu đề popup"
                   />
-                </Field>
+                </div>
 
-                <Field label="Mô tả popup quảng cáo">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-800">
+                    Mô tả popup quảng cáo
+                  </label>
                   <textarea
-                    className={`${textareaClass} min-h-[110px]`}
+                    className="min-h-[110px] w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none transition focus:border-red-300 focus:bg-white"
                     value={form.adDesc}
                     onChange={(e) => updateForm("adDesc", e.target.value)}
-                    placeholder="VD: Giảm 50% hôm nay"
+                    placeholder="Nhập mô tả popup"
                   />
-                </Field>
+                </div>
 
-                <Field label="Ảnh popup quảng cáo từ máy tính">
-                  <div className={fileBoxClass}>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0] ?? null;
-                        setAdImageFile(file);
-                      }}
-                      className="w-full"
-                    />
-                  </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-800">
+                    Ảnh popup quảng cáo
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      setAdImageFile(file);
+                    }}
+                    className="w-full"
+                  />
 
                   {adImagePreview ? (
                     <img
@@ -852,7 +774,7 @@ export default function AdminPage() {
                       className="mt-4 h-56 w-full rounded-2xl object-cover"
                     />
                   ) : null}
-                </Field>
+                </div>
               </div>
             </Card>
 
@@ -864,18 +786,23 @@ export default function AdminPage() {
               {submitting
                 ? "Đang xử lý..."
                 : isEditing
-                ? "Lưu cập nhật bài viết"
-                : "Đăng bài viết"}
+                ? "Lưu cập nhật"
+                : "Đăng bài"}
             </button>
           </div>
 
           <div className="space-y-6">
             <Card>
               <div className="mb-5 flex items-center justify-between">
-                <SectionTitle
-                  title="Danh sách bài viết"
-                  desc="Bấm sửa để đổ dữ liệu về form, bấm xóa để gỡ bài khỏi website."
-                />
+                <div>
+                  <h2 className="text-2xl font-extrabold text-gray-900">
+                    Danh sách bài viết
+                  </h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Bấm sửa để đổ dữ liệu về form, bấm xóa để gỡ bài khỏi website.
+                  </p>
+                </div>
+
                 <button
                   onClick={fetchPosts}
                   className="rounded-2xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700"
@@ -890,109 +817,59 @@ export default function AdminPage() {
                 <p className="text-gray-500">Chưa có bài viết nào.</p>
               ) : (
                 <div className="space-y-4">
-                  {posts.map((post) => (
-                    <div
-                      key={post.id}
-                      className="rounded-2xl border border-gray-200 p-4"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <h3 className="truncate text-lg font-bold text-gray-900">
-                            {post.title}
-                          </h3>
-                          <p className="mt-1 text-sm text-gray-500">/{post.slug}</p>
-                          <p className="mt-2 text-sm text-gray-500">
-                            Trạng thái: {post.status}
-                          </p>
-                          {post.ad_title ? (
-                            <p className="mt-1 text-sm text-gray-500">
-                              Popup: {post.ad_title}
+                  {posts.map((post) => {
+                    const postImages = safeParseArray(post.images);
+                    const firstImage = postImages[0] || "";
+
+                    return (
+                      <div
+                        key={post.id}
+                        className="rounded-2xl border border-gray-200 p-4"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="min-w-0">
+                            <h3 className="truncate text-lg font-bold text-gray-900">
+                              {post.title}
+                            </h3>
+                            <p className="mt-1 text-sm text-gray-500">/{post.slug}</p>
+                            <p className="mt-2 text-sm text-gray-500">
+                              Trạng thái: {post.status}
                             </p>
-                          ) : null}
+                            {post.ad_title ? (
+                              <p className="mt-1 text-sm text-gray-500">
+                                Popup: {post.ad_title}
+                              </p>
+                            ) : null}
+                          </div>
+
+                          <div className="flex shrink-0 gap-2">
+                            <button
+                              onClick={() => handleEdit(post)}
+                              className="rounded-2xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700"
+                            >
+                              Sửa
+                            </button>
+                            <button
+                              onClick={() => handleDelete(post)}
+                              className="rounded-2xl border border-red-200 px-4 py-2 text-sm font-medium text-red-600"
+                            >
+                              Xóa
+                            </button>
+                          </div>
                         </div>
 
-                        <div className="flex shrink-0 gap-2">
-                          <button
-                            onClick={() => handleEdit(post)}
-                            className="rounded-2xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700"
-                          >
-                            Sửa
-                          </button>
-                          <button
-                            onClick={() => handleDelete(post)}
-                            className="rounded-2xl border border-red-200 px-4 py-2 text-sm font-medium text-red-600"
-                          >
-                            Xóa
-                          </button>
-                        </div>
+                        {firstImage ? (
+                          <img
+                            src={firstImage}
+                            alt={post.title}
+                            className="mt-4 h-44 w-full rounded-2xl object-cover"
+                          />
+                        ) : null}
                       </div>
-
-                      {post.cover_image ? (
-                        <img
-                          src={post.cover_image}
-                          alt={post.title}
-                          className="mt-4 h-44 w-full rounded-2xl object-cover"
-                        />
-                      ) : null}
-
-                      {post.ad_image ? (
-                        <img
-                          src={post.ad_image}
-                          alt={post.ad_title || "Ảnh quảng cáo"}
-                          className="mt-4 h-32 w-full rounded-2xl object-cover"
-                        />
-                      ) : null}
-
-                      {post.video_url ? (
-                        <video
-                          controls
-                          className="mt-4 w-full rounded-2xl bg-black"
-                          src={post.video_url}
-                        />
-                      ) : null}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
-            </Card>
-
-            <Card>
-              <SectionTitle
-                title="Hướng dẫn sử dụng"
-                desc="Quy trình đăng bài nhanh theo đúng hệ thống hiện tại."
-              />
-              <ol className="space-y-3 text-sm leading-6 text-gray-600">
-                <li className="flex gap-3">
-                  <span className="mt-[2px] inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
-                    1
-                  </span>
-                  <span>Nhập tiêu đề, slug, nội dung và trạng thái bài viết.</span>
-                </li>
-                <li className="flex gap-3">
-                  <span className="mt-[2px] inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
-                    2
-                  </span>
-                  <span>Thêm ảnh cover, nhiều ảnh nội dung, video chính và nhiều video nội dung.</span>
-                </li>
-                <li className="flex gap-3">
-                  <span className="mt-[2px] inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
-                    3
-                  </span>
-                  <span>Nhập link popup quảng cáo, tiêu đề, mô tả và ảnh quảng cáo nếu cần.</span>
-                </li>
-                <li className="flex gap-3">
-                  <span className="mt-[2px] inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
-                    4
-                  </span>
-                  <span>Bấm đăng bài để lưu lên website. Nếu đang sửa, bấm lưu cập nhật.</span>
-                </li>
-                <li className="flex gap-3">
-                  <span className="mt-[2px] inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
-                    5
-                  </span>
-                  <span>Danh sách bài viết bên phải dùng để sửa nhanh hoặc xóa bài khỏi website.</span>
-                </li>
-              </ol>
             </Card>
           </div>
         </div>
