@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { notFound } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { createSupabaseServer } from "@/lib/supabase";
 import AdPopup from "../components/AdPopup";
 
 type PageProps = {
@@ -22,6 +22,7 @@ function parseJsonArray(value: string | null): string[] {
 
 export default async function PostDetailPage({ params }: PageProps) {
   const { slug } = await params;
+  const supabase = createSupabaseServer();
 
   const { data: post, error } = await supabase
     .from("posts")

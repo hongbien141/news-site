@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { createSupabaseServer } from "@/lib/supabase";
 
 type Post = {
   id: number;
@@ -26,6 +26,8 @@ function parseJsonArray(value: string | null): string[] {
 }
 
 export default async function HomePage() {
+  const supabase = createSupabaseServer();
+
   const { data: posts, error } = await supabase
     .from("posts")
     .select("*")
