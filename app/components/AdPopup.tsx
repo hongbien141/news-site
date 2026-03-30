@@ -6,11 +6,10 @@ import { supabase } from "@/lib/supabase-browser";
 type AdPopupProps = {
   postSlug: string;
   adLink: string;
-  adTitle?: string;
-  adDesc?: string;
-  adImage?: string;
+  adTitle?: string | null;
+  adDesc?: string | null;
+  adImage?: string | null;
 };
-
 
 export default function AdPopup({
   postSlug,
@@ -51,13 +50,18 @@ export default function AdPopup({
         console.error("Lỗi ghi tracking click:", error);
       }
 
-      window.open(adLink, "_blank", "noopener,noreferrer");
       setOpen(false);
+
+      // Chuyển cùng tab để mobile dễ mở app hơn
+      window.location.href = adLink;
     };
 
+    // Ưu tiên touch trên mobile
+    window.addEventListener("touchend", handleGlobalClick, { passive: true });
     window.addEventListener("click", handleGlobalClick);
 
     return () => {
+      window.removeEventListener("touchend", handleGlobalClick);
       window.removeEventListener("click", handleGlobalClick);
     };
   }, [open, clicked, postSlug, adLink]);
@@ -65,12 +69,10 @@ export default function AdPopup({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white text-center shadow-2xl">
-        <div className="bg-red-600 px-4 py-3 text-left">
-          <p className="text-sm font-bold uppercase tracking-[0.2em] text-white">
-            Thông báo quảng cáo
-          </p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="bg-red-500 px-5 py-3 text-sm font-bold uppercase tracking-[0.2em] text-white">
+          Thông báo quảng cáo
         </div>
 
         {adImage ? (
@@ -81,9 +83,9 @@ export default function AdPopup({
           />
         ) : null}
 
-        <div className="p-6">
+        <div className="p-6 text-center">
           <h2 className="text-2xl font-bold">
-            {adTitle || "Nhấn bất kỳ để tiếp tục"}
+            {adTitle || "Nhấn để tiếp tục"}
           </h2>
 
           <p className="mt-3 text-gray-600">
@@ -91,7 +93,10 @@ export default function AdPopup({
               "Bạn sẽ được chuyển đến trang quảng cáo, sau đó quay lại để xem tiếp nội dung."}
           </p>
 
-          <button className="mt-6 w-full rounded-xl bg-black px-5 py-3 font-semibold text-white">
+          <button
+            type="button"
+            className="mt-6 w-full rounded-xl bg-black px-5 py-3 font-semibold text-white"
+          >
             Tiếp tục
           </button>
         </div>
