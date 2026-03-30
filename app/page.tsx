@@ -50,7 +50,7 @@ export default async function HomePage() {
         </p>
 
         <h1 className="mt-4 text-5xl font-extrabold tracking-tight md:text-7xl">
-          Hồng Biên 141
+          Hóng Biến 141
         </h1>
 
         <p className="mt-4 text-2xl text-gray-600">Danh sách bài viết mới nhất</p>
