@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createBrowserSupabase } from "../../lib/supabase-browser";
+import { supabase } from "@/lib/supabase-browser";
 
 type AdPopupProps = {
   postSlug: string;
@@ -11,7 +11,6 @@ type AdPopupProps = {
   adImage?: string;
 };
 
-const supabase = createBrowserSupabase();
 
 export default function AdPopup({
   postSlug,
