@@ -52,11 +52,8 @@ export default function AdPopup({
 
     setOpen(false);
 
-    const win = window.open(adLink, "_blank", "noopener,noreferrer");
-
-    if (!win) {
-      window.location.href = adLink;
-    }
+    // Chỉ mở tab mới, KHÔNG cho tab hiện tại nhảy theo
+    window.open(adLink, "_blank", "noopener,noreferrer");
   };
 
   useEffect(() => {
@@ -109,7 +106,7 @@ export default function AdPopup({
 
           <p className="mt-3 text-gray-600">
             {adDesc ||
-              "Bạn sẽ được mở quảng cáo ở tab mới, sau đó có thể quay lại đọc tiếp nội dung."}
+              "Quảng cáo sẽ được mở ở tab mới. Bạn có thể quay lại để đọc tiếp bài viết."}
           </p>
 
           <button
