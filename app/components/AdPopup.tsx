@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase-browser";
 
 type AdPopupProps = {
   postSlug: string;
   adLink: string;
-  adTitle?: string | null;
-  adDesc?: string | null;
-  adImage?: string | null;
+  adTitle?: string;
+  adDesc?: string;
+  adImage?: string;
 };
+
 
 export default function AdPopup({
   postSlug,
@@ -20,7 +21,6 @@ export default function AdPopup({
 }: AdPopupProps) {
   const [open, setOpen] = useState(false);
   const [clicked, setClicked] = useState(false);
-  const touchHandledRef = useRef(false);
 
   useEffect(() => {
     const key = `ad_seen_${postSlug}`;
@@ -31,64 +31,46 @@ export default function AdPopup({
     }
   }, [postSlug]);
 
-  const openAd = async () => {
-    if (clicked) return;
-
-    setClicked(true);
-
-    const key = `ad_seen_${postSlug}`;
-    sessionStorage.setItem(key, "1");
-
-    try {
-      await supabase.from("ad_clicks").insert([
-        {
-          post_slug: postSlug,
-          ad_link: adLink,
-        },
-      ]);
-    } catch (error) {
-      console.error("Lỗi ghi tracking click:", error);
-    }
-
-    setOpen(false);
-
-    // Chỉ mở tab mới, KHÔNG cho tab hiện tại nhảy theo
-    window.open(adLink, "_blank", "noopener,noreferrer");
-  };
-
   useEffect(() => {
     if (!open || clicked) return;
 
-    const handleTouchEnd = () => {
-      touchHandledRef.current = true;
-      openAd();
+    const handleGlobalClick = async () => {
+      setClicked(true);
 
-      setTimeout(() => {
-        touchHandledRef.current = false;
-      }, 500);
+      const key = `ad_seen_${postSlug}`;
+      sessionStorage.setItem(key, "1");
+
+      try {
+        await supabase.from("ad_clicks").insert([
+          {
+            post_slug: postSlug,
+            ad_link: adLink,
+          },
+        ]);
+      } catch (error) {
+        console.error("Lỗi ghi tracking click:", error);
+      }
+
+      window.open(adLink, "_blank", "noopener,noreferrer");
+      setOpen(false);
     };
 
-    const handleClick = () => {
-      if (touchHandledRef.current) return;
-      openAd();
-    };
-
-    window.addEventListener("touchend", handleTouchEnd, { passive: true });
-    window.addEventListener("click", handleClick);
+    window.addEventListener("click", handleGlobalClick);
 
     return () => {
-      window.removeEventListener("touchend", handleTouchEnd);
-      window.removeEventListener("click", handleClick);
+      window.removeEventListener("click", handleGlobalClick);
     };
-  }, [open, clicked, adLink, postSlug]);
+  }, [open, clicked, postSlug, adLink]);
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
-        <div className="bg-red-500 px-5 py-3 text-sm font-bold uppercase tracking-[0.2em] text-white">
-          Thông báo quảng cáo
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white text-center shadow-2xl">
+        <div className="bg-red-600 px-4 py-3 text-left">
+          <p className="text-sm font-bold uppercase tracking-[0.2em] text-white">
+            Thông báo quảng cáo
+          </p>
         </div>
 
         {adImage ? (
@@ -99,20 +81,17 @@ export default function AdPopup({
           />
         ) : null}
 
-        <div className="p-6 text-center">
+        <div className="p-6">
           <h2 className="text-2xl font-bold">
             {adTitle || "Nhấn bất kỳ để tiếp tục"}
           </h2>
 
           <p className="mt-3 text-gray-600">
             {adDesc ||
-              "Quảng cáo sẽ được mở ở tab mới. Bạn có thể quay lại để đọc tiếp bài viết."}
+              "Bạn sẽ được chuyển đến trang quảng cáo, sau đó quay lại để xem tiếp nội dung."}
           </p>
 
-          <button
-            type="button"
-            className="mt-6 w-full rounded-xl bg-black px-5 py-3 font-semibold text-white"
-          >
+          <button className="mt-6 w-full rounded-xl bg-black px-5 py-3 font-semibold text-white">
             Tiếp tục
           </button>
         </div>
