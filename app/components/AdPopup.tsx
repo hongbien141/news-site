@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase-browser";
 
 type AdPopupProps = {
@@ -20,6 +20,7 @@ export default function AdPopup({
 }: AdPopupProps) {
   const [open, setOpen] = useState(false);
   const [clicked, setClicked] = useState(false);
+  const touchHandledRef = useRef(false);
 
   useEffect(() => {
     const key = `ad_seen_${postSlug}`;
@@ -30,41 +31,67 @@ export default function AdPopup({
     }
   }, [postSlug]);
 
+  const openAd = () => {
+    if (clicked) return;
+
+    setClicked(true);
+
+    const key = `ad_seen_${postSlug}`;
+    sessionStorage.setItem(key, "1");
+
+    // Mở tab mới NGAY trong thao tác click/touch của user
+    const popup = window.open(adLink, "_blank", "noopener,noreferrer");
+
+    setOpen(false);
+
+    // Ghi tracking sau, không chặn popup
+    void supabase.from("ad_clicks").insert([
+      {
+        post_slug: postSlug,
+        ad_link: adLink,
+      },
+    ]).then(({ error }) => {
+      if (error) {
+        console.error("Lỗi ghi tracking click:", error);
+      }
+    });
+
+    // Nếu browser chặn popup thì chỉ đóng popup thôi, không cho tab cũ nhảy theo
+    if (!popup) {
+      console.warn("Popup bị chặn bởi trình duyệt.");
+    }
+  };
+
   useEffect(() => {
     if (!open || clicked) return;
 
-    const handleGlobalClick = async () => {
-      setClicked(true);
+    const handleTouchEnd = () => {
+      touchHandledRef.current = true;
+      openAd();
 
-      const key = `ad_seen_${postSlug}`;
-      sessionStorage.setItem(key, "1");
-
-      try {
-        await supabase.from("ad_clicks").insert([
-          {
-            post_slug: postSlug,
-            ad_link: adLink,
-          },
-        ]);
-      } catch (error) {
-        console.error("Lỗi ghi tracking click:", error);
-      }
-
-      window.open(adLink, "_blank", "noopener,noreferrer");
-      setOpen(false);
+      window.setTimeout(() => {
+        touchHandledRef.current = false;
+      }, 500);
     };
 
-    window.addEventListener("click", handleGlobalClick);
+    const handleClick = () => {
+      if (touchHandledRef.current) return;
+      openAd();
+    };
+
+    window.addEventListener("touchend", handleTouchEnd, { passive: true });
+    window.addEventListener("click", handleClick);
 
     return () => {
-      window.removeEventListener("click", handleGlobalClick);
+      window.removeEventListener("touchend", handleTouchEnd);
+      window.removeEventListener("click", handleClick);
     };
-  }, [open, clicked, postSlug, adLink]);
+  }, [open, clicked, adLink, postSlug]);
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
       <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="bg-red-500 px-5 py-3 text-sm font-bold uppercase tracking-[0.2em] text-white">
           Thông báo quảng cáo
@@ -85,7 +112,7 @@ export default function AdPopup({
 
           <p className="mt-3 text-gray-600">
             {adDesc ||
-              "Bạn sẽ được chuyển đến trang quảng cáo, sau đó quay lại để xem tiếp nội dung."}
+              "Quảng cáo sẽ được mở ở tab mới. Bạn có thể quay lại để đọc tiếp bài viết."}
           </p>
 
           <button
