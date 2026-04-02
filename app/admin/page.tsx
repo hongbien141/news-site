@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase-browser";
 
 type Post = {
@@ -9,50 +9,49 @@ type Post = {
   slug: string;
   content: string;
   status: string;
-  popup_link: string | null;
-  ad_title: string | null;
-  ad_desc: string | null;
-  ad_image: string | null;
   images: string[] | null;
-  videos: string[] | null;
+  videos: VideoPayload[] | null;
+  popup_link?: string | null;
+  ad_title?: string | null;
+  ad_desc?: string | null;
+  ad_image?: string | null;
   created_at?: string;
 };
 
-type MediaItem = {
+type ImageItem = {
   file: File | null;
   preview: string;
   existingUrl?: string;
 };
 
-function Card({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <section className={`rounded-3xl border border-gray-200 bg-white p-6 shadow-sm ${className}`}>
-      {children}
-    </section>
-  );
-}
+type VideoItem = {
+  mode: "upload" | "embed";
+  file: File | null;
+  preview: string;
+  existingUrl?: string;
+  embedUrl: string;
+  provider: "x" | "telegram";
+};
 
-function safeParseArray(value: unknown): string[] {
-  if (!value) return [];
-  if (Array.isArray(value)) return value.filter((v) => typeof v === "string");
-
-  if (typeof value === "string") {
-    try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? parsed.filter((v) => typeof v === "string") : [];
-    } catch {
-      return [];
+type VideoPayload =
+  | {
+      type: "upload";
+      url: string;
     }
-  }
+  | {
+      type: "embed";
+      url: string;
+      provider: "x" | "telegram";
+    };
 
-  return [];
-}
+const inputClass =
+  "w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none transition focus:border-red-300 focus:bg-white";
+
+const textareaClass =
+  "min-h-[180px] w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none transition focus:border-red-300 focus:bg-white";
+
+const cardClass = "rounded-3xl border border-gray-200 bg-white p-6 shadow-sm";
+const blockClass = "rounded-2xl border border-gray-200 bg-gray-50 p-4";
 
 function slugify(text: string) {
   return text
@@ -64,13 +63,56 @@ function slugify(text: string) {
     .replace(/^-+|-+$/g, "");
 }
 
+function safeParseImages(value: unknown): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.filter((v): v is string => typeof v === "string");
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : [];
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+}
+
+function safeParseVideos(value: unknown): VideoPayload[] {
+  if (!value) return [];
+  if (Array.isArray(value)) return value as VideoPayload[];
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+}
+
+function getEmbedPreviewUrl(provider: "x" | "telegram", url: string) {
+  if (!url.trim()) return "";
+
+  if (provider === "telegram") {
+    const match = url.match(/^https?:\/\/t\.me\/([^/]+)\/(\d+)/i);
+    if (!match) return "";
+    return `https://t.me/${match[1]}/${match[2]}?embed=1`;
+  }
+
+  return `https://twitframe.com/show?url=${encodeURIComponent(url)}`;
+}
+
 async function uploadFile(file: File, folder: "post-images" | "post-videos" | "ads") {
   const bucket = folder === "post-videos" ? "videos" : "images";
 
-  const extension = file.name.split(".").pop()?.toLowerCase() || "";
+  const ext = file.name.split(".").pop()?.toLowerCase() || "";
   const baseName = file.name.replace(/\.[^/.]+$/, "");
-
-  const sanitizedBaseName = baseName
+  const safeBase = baseName
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -78,20 +120,16 @@ async function uploadFile(file: File, folder: "post-images" | "post-videos" | "a
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
-  const safeName = `${Date.now()}-${sanitizedBaseName || "file"}${extension ? `.${extension}` : ""}`;
-  const filePath = `${folder}/${safeName}`;
+  const fileName = `${Date.now()}-${safeBase || "file"}${ext ? `.${ext}` : ""}`;
+  const filePath = `${folder}/${fileName}`;
 
-  const { error: uploadError } = await supabase.storage
-    .from(bucket)
-    .upload(filePath, file, {
-      cacheControl: "3600",
-      upsert: false,
-    });
+  const { error } = await supabase.storage.from(bucket).upload(filePath, file, {
+    cacheControl: "3600",
+    upsert: false,
+  });
 
-  if (uploadError) {
-    throw new Error(
-      `Upload ${bucket === "videos" ? "video" : "ảnh"} lỗi: ${uploadError.message}`
-    );
+  if (error) {
+    throw new Error(error.message);
   }
 
   const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
@@ -108,6 +146,9 @@ export default function AdminPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [fetchingPosts, setFetchingPosts] = useState(false);
 
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+
   const [editingId, setEditingId] = useState<number | null>(null);
 
   const [title, setTitle] = useState("");
@@ -118,29 +159,37 @@ export default function AdminPage() {
   const [popupLink, setPopupLink] = useState("");
   const [adTitle, setAdTitle] = useState("");
   const [adDesc, setAdDesc] = useState("");
-
   const [adImageFile, setAdImageFile] = useState<File | null>(null);
   const [adImagePreview, setAdImagePreview] = useState("");
   const [existingAdImage, setExistingAdImage] = useState("");
 
-  const [images, setImages] = useState<MediaItem[]>([{ file: null, preview: "" }]);
-  const [videos, setVideos] = useState<MediaItem[]>([{ file: null, preview: "" }]);
+  const [images, setImages] = useState<ImageItem[]>([{ file: null, preview: "" }]);
+
+  const [videos, setVideos] = useState<VideoItem[]>([
+    {
+      mode: "upload",
+      file: null,
+      preview: "",
+      embedUrl: "",
+      provider: "x",
+    },
+  ]);
 
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    const checkSession = async () => {
+    const boot = async () => {
       const { data } = await supabase.auth.getSession();
       setIsLoggedIn(!!data.session);
       setLoading(false);
     };
 
-    checkSession();
+    boot();
   }, []);
 
   useEffect(() => {
     if (!isLoggedIn) return;
-    fetchPosts();
+    void loadPosts();
   }, [isLoggedIn]);
 
   useEffect(() => {
@@ -155,7 +204,7 @@ export default function AdminPage() {
     return () => URL.revokeObjectURL(objectUrl);
   }, [adImageFile]);
 
-  async function fetchPosts() {
+  async function loadPosts() {
     setFetchingPosts(true);
 
     const { data, error } = await supabase
@@ -170,7 +219,13 @@ export default function AdminPage() {
       return;
     }
 
-    setPosts((data ?? []) as Post[]);
+    const normalized = (data || []).map((item: any) => ({
+      ...item,
+      images: safeParseImages(item.images),
+      videos: safeParseVideos(item.videos),
+    })) as Post[];
+
+    setPosts(normalized);
   }
 
   async function handleLogin() {
@@ -202,13 +257,34 @@ export default function AdminPage() {
     setPopupLink("");
     setAdTitle("");
     setAdDesc("");
-
     setAdImageFile(null);
     setAdImagePreview("");
     setExistingAdImage("");
-
     setImages([{ file: null, preview: "" }]);
-    setVideos([{ file: null, preview: "" }]);
+    setVideos([
+      {
+        mode: "upload",
+        file: null,
+        preview: "",
+        embedUrl: "",
+        provider: "x",
+      },
+    ]);
+  }
+
+  function addImage() {
+    setImages((prev) => [...prev, { file: null, preview: "" }]);
+  }
+
+  function removeImage(index: number) {
+    setImages((prev) => {
+      const target = prev[index];
+      if (target?.preview.startsWith("blob:")) {
+        URL.revokeObjectURL(target.preview);
+      }
+      const next = prev.filter((_, i) => i !== index);
+      return next.length ? next : [{ file: null, preview: "" }];
+    });
   }
 
   function updateImageFile(index: number, file: File | null) {
@@ -216,7 +292,7 @@ export default function AdminPage() {
       const next = [...prev];
       const old = next[index];
 
-      if (old?.preview && old.preview.startsWith("blob:")) {
+      if (old?.preview.startsWith("blob:")) {
         URL.revokeObjectURL(old.preview);
       }
 
@@ -224,6 +300,63 @@ export default function AdminPage() {
         file,
         preview: file ? URL.createObjectURL(file) : old?.existingUrl || "",
         existingUrl: file ? undefined : old?.existingUrl,
+      };
+
+      return next;
+    });
+  }
+
+  function addVideo() {
+    setVideos((prev) => [
+      ...prev,
+      {
+        mode: "upload",
+        file: null,
+        preview: "",
+        embedUrl: "",
+        provider: "x",
+      },
+    ]);
+  }
+
+  function removeVideo(index: number) {
+    setVideos((prev) => {
+      const target = prev[index];
+      if (target?.preview.startsWith("blob:")) {
+        URL.revokeObjectURL(target.preview);
+      }
+
+      const next = prev.filter((_, i) => i !== index);
+      return next.length
+        ? next
+        : [
+            {
+              mode: "upload",
+              file: null,
+              preview: "",
+              embedUrl: "",
+              provider: "x",
+            },
+          ];
+    });
+  }
+
+  function setVideoMode(index: number, mode: "upload" | "embed") {
+    setVideos((prev) => {
+      const next = [...prev];
+      const old = next[index];
+
+      if (old.preview.startsWith("blob:")) {
+        URL.revokeObjectURL(old.preview);
+      }
+
+      next[index] = {
+        ...old,
+        mode,
+        file: null,
+        preview: "",
+        existingUrl: mode === "upload" ? old.existingUrl : undefined,
+        embedUrl: mode === "embed" ? old.embedUrl : "",
       };
 
       return next;
@@ -235,68 +368,87 @@ export default function AdminPage() {
       const next = [...prev];
       const old = next[index];
 
-      if (old?.preview && old.preview.startsWith("blob:")) {
+      if (old.preview.startsWith("blob:")) {
         URL.revokeObjectURL(old.preview);
       }
 
       next[index] = {
+        ...old,
+        mode: "upload",
         file,
-        preview: file ? URL.createObjectURL(file) : old?.existingUrl || "",
-        existingUrl: file ? undefined : old?.existingUrl,
+        preview: file ? URL.createObjectURL(file) : old.existingUrl || "",
+        existingUrl: file ? undefined : old.existingUrl,
+        embedUrl: "",
       };
 
       return next;
     });
   }
 
-  function addImageItem() {
-    setImages((prev) => [...prev, { file: null, preview: "" }]);
-  }
-
-  function addVideoItem() {
-    setVideos((prev) => [...prev, { file: null, preview: "" }]);
-  }
-
-  function removeImageItem(index: number) {
-    setImages((prev) => {
-      const target = prev[index];
-      if (target?.preview && target.preview.startsWith("blob:")) {
-        URL.revokeObjectURL(target.preview);
-      }
-
-      const next = prev.filter((_, i) => i !== index);
-      return next.length ? next : [{ file: null, preview: "" }];
-    });
-  }
-
-  function removeVideoItem(index: number) {
+  function updateVideoProvider(index: number, provider: "x" | "telegram") {
     setVideos((prev) => {
-      const target = prev[index];
-      if (target?.preview && target.preview.startsWith("blob:")) {
-        URL.revokeObjectURL(target.preview);
-      }
-
-      const next = prev.filter((_, i) => i !== index);
-      return next.length ? next : [{ file: null, preview: "" }];
+      const next = [...prev];
+      next[index] = {
+        ...next[index],
+        provider,
+      };
+      return next;
     });
   }
 
-  async function uploadMediaItems(
-    items: MediaItem[],
-    folder: "post-images" | "post-videos"
-  ) {
-    const results: string[] = [];
+  function updateVideoEmbed(index: number, embedUrl: string) {
+    setVideos((prev) => {
+      const next = [...prev];
+      next[index] = {
+        ...next[index],
+        mode: "embed",
+        file: null,
+        preview: "",
+        existingUrl: undefined,
+        embedUrl,
+      };
+      return next;
+    });
+  }
 
-    for (const item of items) {
+  async function uploadImages() {
+    const result: string[] = [];
+
+    for (const item of images) {
       if (item.file) {
-        const url = await uploadFile(item.file, folder);
-        results.push(url);
+        const url = await uploadFile(item.file, "post-images");
+        result.push(url);
       } else if (item.existingUrl) {
-        results.push(item.existingUrl);
+        result.push(item.existingUrl);
       }
     }
 
-    return results;
+    return result;
+  }
+
+  async function uploadVideos() {
+    const result: VideoPayload[] = [];
+
+    for (const item of videos) {
+      if (item.mode === "upload") {
+        if (item.file) {
+          const url = await uploadFile(item.file, "post-videos");
+          result.push({ type: "upload", url });
+        } else if (item.existingUrl) {
+          result.push({ type: "upload", url: item.existingUrl });
+        }
+      }
+
+      if (item.mode === "embed" && item.embedUrl.trim()) {
+        result.push({
+          type: "embed",
+          url: item.embedUrl.trim(),
+          provider: item.provider,
+        });
+      }
+    }
+
+    return result;
   }
 
   async function uploadAdImageIfNeeded() {
@@ -305,22 +457,15 @@ export default function AdminPage() {
   }
 
   async function handleSubmit() {
-    if (!title.trim()) {
-      alert("Bạn chưa nhập tiêu đề");
-      return;
-    }
-
-    if (!slug.trim()) {
-      alert("Bạn chưa nhập slug");
-      return;
-    }
+    if (!title.trim()) return alert("Bạn chưa nhập tiêu đề");
+    if (!slug.trim()) return alert("Bạn chưa nhập slug");
 
     setSubmitting(true);
 
     try {
       const [uploadedImages, uploadedVideos, uploadedAdImage] = await Promise.all([
-        uploadMediaItems(images, "post-images"),
-        uploadMediaItems(videos, "post-videos"),
+        uploadImages(),
+        uploadVideos(),
         uploadAdImageIfNeeded(),
       ]);
 
@@ -329,33 +474,29 @@ export default function AdminPage() {
         slug: slug.trim(),
         content: content.trim(),
         status,
+        images: JSON.stringify(uploadedImages),
+        videos: JSON.stringify(uploadedVideos),
         popup_link: popupLink.trim() || null,
         ad_title: adTitle.trim() || null,
         ad_desc: adDesc.trim() || null,
-        ad_image: uploadedAdImage,
-        images: uploadedImages,
-        videos: uploadedVideos,
+        ad_image: uploadedAdImage || null,
       };
 
       if (editingId) {
-        const { error } = await supabase
-          .from("posts")
-          .update(payload)
-          .eq("id", editingId);
-
+        const { error } = await supabase.from("posts").update(payload).eq("id", editingId);
         if (error) throw error;
         alert("Cập nhật bài viết thành công");
       } else {
         const { error } = await supabase.from("posts").insert([payload]);
-
         if (error) throw error;
         alert("Đăng bài thành công");
       }
 
       resetForm();
-      await fetchPosts();
+      await loadPosts();
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error: any) {
-      alert(error.message || "Có lỗi xảy ra");
+      alert("Lỗi: " + (error.message || "Không xác định"));
     } finally {
       setSubmitting(false);
     }
@@ -374,12 +515,9 @@ export default function AdminPage() {
     setAdImageFile(null);
     setAdImagePreview("");
 
-    const parsedImages = safeParseArray(post.images);
-    const parsedVideos = safeParseArray(post.videos);
-
     setImages(
-      parsedImages.length
-        ? parsedImages.map((url) => ({
+      post.images && post.images.length
+        ? post.images.map((url) => ({
             file: null,
             preview: url,
             existingUrl: url,
@@ -388,13 +526,37 @@ export default function AdminPage() {
     );
 
     setVideos(
-      parsedVideos.length
-        ? parsedVideos.map((url) => ({
-            file: null,
-            preview: url,
-            existingUrl: url,
-          }))
-        : [{ file: null, preview: "" }]
+      post.videos && post.videos.length
+        ? post.videos.map((item) => {
+            if (item.type === "upload") {
+              return {
+                mode: "upload" as const,
+                file: null,
+                preview: item.url,
+                existingUrl: item.url,
+                embedUrl: "",
+                provider: "x" as const,
+              };
+            }
+
+            return {
+              mode: "embed" as const,
+              file: null,
+              preview: "",
+              existingUrl: undefined,
+              embedUrl: item.url,
+              provider: item.provider || "x",
+            };
+          })
+        : [
+            {
+              mode: "upload",
+              file: null,
+              preview: "",
+              embedUrl: "",
+              provider: "x",
+            },
+          ]
     );
 
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -415,15 +577,22 @@ export default function AdminPage() {
       resetForm();
     }
 
-    await fetchPosts();
+    await loadPosts();
     alert("Đã xóa bài");
   }
 
-  const inputClass =
-    "w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none transition focus:border-red-300 focus:bg-white";
-  const textareaClass =
-    "min-h-[200px] w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none transition focus:border-red-300 focus:bg-white";
-  const blockClass = "rounded-2xl border border-gray-200 bg-gray-50 p-4";
+  const filteredPosts = useMemo(() => {
+    return posts.filter((post) => {
+      const matchesSearch =
+        !search.trim() ||
+        post.title.toLowerCase().includes(search.toLowerCase()) ||
+        post.slug.toLowerCase().includes(search.toLowerCase());
+
+      const matchesStatus = statusFilter === "all" || post.status === statusFilter;
+
+      return matchesSearch && matchesStatus;
+    });
+  }, [posts, search, statusFilter]);
 
   if (loading) {
     return <main className="p-10">Đang tải...</main>;
@@ -442,7 +611,7 @@ export default function AdminPage() {
             </h1>
           </div>
 
-          <Card>
+          <div className={cardClass}>
             <div className="space-y-4">
               <input
                 placeholder="Email"
@@ -467,7 +636,7 @@ export default function AdminPage() {
                 Đăng nhập
               </button>
             </div>
-          </Card>
+          </div>
         </div>
       </main>
     );
@@ -483,10 +652,10 @@ export default function AdminPage() {
                 ADMIN
               </div>
               <h1 className="mt-4 text-4xl font-extrabold tracking-tight text-gray-900 md:text-5xl">
-                Trình quản lý đăng bài
+                CMS admin pro v1
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-gray-500">
-                Tạo bài viết, thêm nhiều hình ảnh, nhiều video và popup quảng cáo theo giao diện đơn giản.
+                Đăng bài, sửa bài, quản lý nhiều ảnh, video upload hoặc embed X/Telegram và popup quảng cáo.
               </p>
             </div>
 
@@ -502,14 +671,14 @@ export default function AdminPage() {
 
         <div className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
           <div className="space-y-6">
-            <Card>
+            <div className={cardClass}>
               <div className="mb-5 flex items-center justify-between">
                 <div>
                   <h2 className="text-2xl font-extrabold text-gray-900">
                     Thông tin bài viết
                   </h2>
                   <p className="mt-1 text-sm text-gray-500">
-                    Nhập tiêu đề, slug, nội dung và trạng thái bài viết.
+                    Viết tiêu đề, slug, nội dung và trạng thái bài viết.
                   </p>
                 </div>
 
@@ -582,9 +751,9 @@ export default function AdminPage() {
                   />
                 </div>
               </div>
-            </Card>
+            </div>
 
-            <Card>
+            <div className={cardClass}>
               <div className="mb-5">
                 <p className="text-sm font-bold uppercase tracking-[0.2em] text-red-500">
                   HÌNH ẢNH
@@ -595,13 +764,11 @@ export default function AdminPage() {
                 {images.map((item, index) => (
                   <div key={index} className={blockClass}>
                     <div className="mb-3 flex items-center justify-between">
-                      <h3 className="text-lg font-bold text-red-500">
-                        HÌNH ẢNH {index + 1}
-                      </h3>
+                      <h3 className="text-lg font-bold text-red-500">HÌNH ẢNH {index + 1}</h3>
 
                       <button
                         type="button"
-                        onClick={() => removeImageItem(index)}
+                        onClick={() => removeImage(index)}
                         className="text-lg text-gray-500"
                       >
                         × Xóa
@@ -611,17 +778,14 @@ export default function AdminPage() {
                     <input
                       type="file"
                       accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0] ?? null;
-                        updateImageFile(index, file);
-                      }}
+                      onChange={(e) => updateImageFile(index, e.target.files?.[0] || null)}
                       className="w-full"
                     />
 
                     {item.preview ? (
                       <img
                         src={item.preview}
-                        alt={`Hình ảnh ${index + 1}`}
+                        alt={`Ảnh ${index + 1}`}
                         className="mt-4 h-56 w-full rounded-2xl object-cover"
                       />
                     ) : null}
@@ -630,15 +794,15 @@ export default function AdminPage() {
 
                 <button
                   type="button"
-                  onClick={addImageItem}
+                  onClick={addImage}
                   className="w-full rounded-2xl border border-dashed border-red-300 px-4 py-4 text-lg font-semibold text-red-500"
                 >
                   + Thêm hình ảnh
                 </button>
               </div>
-            </Card>
+            </div>
 
-            <Card>
+            <div className={cardClass}>
               <div className="mb-5">
                 <p className="text-sm font-bold uppercase tracking-[0.2em] text-red-500">
                   VIDEO
@@ -649,56 +813,109 @@ export default function AdminPage() {
                 {videos.map((item, index) => (
                   <div key={index} className={blockClass}>
                     <div className="mb-3 flex items-center justify-between">
-                      <h3 className="text-lg font-bold text-red-500">
-                        VIDEO {index + 1}
-                      </h3>
+                      <h3 className="text-lg font-bold text-red-500">VIDEO {index + 1}</h3>
 
                       <button
                         type="button"
-                        onClick={() => removeVideoItem(index)}
+                        onClick={() => removeVideo(index)}
                         className="text-lg text-gray-500"
                       >
                         × Xóa
                       </button>
                     </div>
 
-                    <input
-                      type="file"
-                      accept="video/mp4,video/webm,video/ogg"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0] ?? null;
-                        updateVideoFile(index, file);
-                      }}
-                      className="w-full"
-                    />
+                    <div className="mb-4 flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setVideoMode(index, "upload")}
+                        className={`rounded-xl px-4 py-2 font-semibold ${
+                          item.mode === "upload"
+                            ? "bg-red-500 text-white"
+                            : "border border-gray-300 bg-white text-gray-700"
+                        }`}
+                      >
+                        Upload từ máy
+                      </button>
 
-                    {item.preview ? (
-                      <video
-                        controls
-                        className="mt-4 w-full rounded-2xl bg-black"
-                        src={item.preview}
-                      />
-                    ) : null}
+                      <button
+                        type="button"
+                        onClick={() => setVideoMode(index, "embed")}
+                        className={`rounded-xl px-4 py-2 font-semibold ${
+                          item.mode === "embed"
+                            ? "bg-red-500 text-white"
+                            : "border border-gray-300 bg-white text-gray-700"
+                        }`}
+                      >
+                        Embed link
+                      </button>
+                    </div>
+
+                    {item.mode === "upload" ? (
+                      <>
+                        <input
+                          type="file"
+                          accept="video/mp4,video/webm,video/ogg"
+                          onChange={(e) => updateVideoFile(index, e.target.files?.[0] || null)}
+                          className="w-full"
+                        />
+
+                        {item.preview ? (
+                          <video
+                            controls
+                            className="mt-4 w-full rounded-2xl bg-black"
+                            src={item.preview}
+                          />
+                        ) : null}
+                      </>
+                    ) : (
+                      <div className="space-y-3">
+                        <select
+                          className={inputClass}
+                          value={item.provider}
+                          onChange={(e) => updateVideoProvider(index, e.target.value as "x" | "telegram")}
+                        >
+                          <option value="x">X / Twitter</option>
+                          <option value="telegram">Telegram</option>
+                        </select>
+
+                        <input
+                          className={inputClass}
+                          value={item.embedUrl}
+                          onChange={(e) => updateVideoEmbed(index, e.target.value)}
+                          placeholder={
+                            item.provider === "telegram"
+                              ? "https://t.me/channelname/123"
+                              : "https://twitter.com/username/status/123456789"
+                          }
+                        />
+
+                        {item.embedUrl.trim() ? (
+                          <iframe
+                            src={getEmbedPreviewUrl(item.provider, item.embedUrl)}
+                            className="aspect-video w-full rounded-2xl border bg-white"
+                            allowFullScreen
+                          />
+                        ) : null}
+                      </div>
+                    )}
                   </div>
                 ))}
 
                 <button
                   type="button"
-                  onClick={addVideoItem}
+                  onClick={addVideo}
                   className="w-full rounded-2xl border border-dashed border-red-300 px-4 py-4 text-lg font-semibold text-red-500"
                 >
                   + Thêm video
                 </button>
               </div>
-            </Card>
+            </div>
 
-            <Card>
+            <div className={cardClass}>
               <div className="mb-5">
-                <h2 className="text-2xl font-extrabold text-gray-900">
-                  Popup quảng cáo
-                </h2>
+                <h2 className="text-2xl font-extrabold text-gray-900">Popup quảng cáo</h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Thiết lập link, tiêu đề, mô tả và ảnh popup quảng cáo.
+                  Dùng cho popup affiliate hoặc banner quảng cáo.
                 </p>
               </div>
 
@@ -711,13 +928,13 @@ export default function AdminPage() {
                     className={inputClass}
                     value={popupLink}
                     onChange={(e) => setPopupLink(e.target.value)}
-                    placeholder="https://s.shopee.vn/..."
+                    placeholder="https://shopee.vn/product/..."
                   />
                 </div>
 
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-gray-800">
-                    Tiêu đề popup quảng cáo
+                    Tiêu đề popup
                   </label>
                   <input
                     className={inputClass}
@@ -729,7 +946,7 @@ export default function AdminPage() {
 
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-gray-800">
-                    Mô tả popup quảng cáo
+                    Mô tả popup
                   </label>
                   <textarea
                     className="min-h-[110px] w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none transition focus:border-red-300 focus:bg-white"
@@ -741,34 +958,31 @@ export default function AdminPage() {
 
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-gray-800">
-                    Ảnh popup quảng cáo
+                    Ảnh popup
                   </label>
                   <input
                     type="file"
                     accept="image/*"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] ?? null;
-                      setAdImageFile(file);
-                    }}
+                    onChange={(e) => setAdImageFile(e.target.files?.[0] || null)}
                     className="w-full"
                   />
 
                   {adImagePreview ? (
                     <img
                       src={adImagePreview}
-                      alt="Preview ảnh quảng cáo"
+                      alt="Preview popup"
                       className="mt-4 h-56 w-full rounded-2xl object-cover"
                     />
                   ) : existingAdImage ? (
                     <img
                       src={existingAdImage}
-                      alt="Ảnh quảng cáo hiện tại"
+                      alt="Popup hiện tại"
                       className="mt-4 h-56 w-full rounded-2xl object-cover"
                     />
                   ) : null}
                 </div>
               </div>
-            </Card>
+            </div>
 
             <button
               type="button"
@@ -781,35 +995,53 @@ export default function AdminPage() {
           </div>
 
           <div className="space-y-6">
-            <Card>
-              <div className="mb-5 flex items-center justify-between">
+            <div className={cardClass}>
+              <div className="mb-5 flex items-center justify-between gap-4">
                 <div>
                   <h2 className="text-2xl font-extrabold text-gray-900">
                     Danh sách bài viết
                   </h2>
                   <p className="mt-1 text-sm text-gray-500">
-                    Bấm sửa để đổ dữ liệu về form, bấm xóa để gỡ bài khỏi website.
+                    Tìm kiếm, lọc, sửa và xóa bài viết.
                   </p>
                 </div>
 
                 <button
                   type="button"
-                  onClick={fetchPosts}
+                  onClick={loadPosts}
                   className="rounded-2xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700"
                 >
                   Tải lại
                 </button>
               </div>
 
+              <div className="mb-4 grid gap-3 md:grid-cols-2">
+                <input
+                  className={inputClass}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Tìm theo tiêu đề hoặc slug"
+                />
+
+                <select
+                  className={inputClass}
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                >
+                  <option value="all">Tất cả trạng thái</option>
+                  <option value="published">published</option>
+                  <option value="draft">draft</option>
+                </select>
+              </div>
+
               {fetchingPosts ? (
                 <p className="text-gray-500">Đang tải bài viết...</p>
-              ) : posts.length === 0 ? (
+              ) : filteredPosts.length === 0 ? (
                 <p className="text-gray-500">Chưa có bài viết nào.</p>
               ) : (
                 <div className="space-y-4">
-                  {posts.map((post) => {
-                    const postImages = safeParseArray(post.images);
-                    const firstImage = postImages[0] || "";
+                  {filteredPosts.map((post) => {
+                    const firstImage = post.images?.[0] || "";
 
                     return (
                       <div key={post.id} className="rounded-2xl border border-gray-200 p-4">
@@ -822,9 +1054,9 @@ export default function AdminPage() {
                             <p className="mt-2 text-sm text-gray-500">
                               Trạng thái: {post.status}
                             </p>
-                            {post.ad_title ? (
+                            {post.created_at ? (
                               <p className="mt-1 text-sm text-gray-500">
-                                Popup: {post.ad_title}
+                                {new Date(post.created_at).toLocaleString("vi-VN")}
                               </p>
                             ) : null}
                           </div>
@@ -837,6 +1069,7 @@ export default function AdminPage() {
                             >
                               Sửa
                             </button>
+
                             <button
                               type="button"
                               onClick={() => handleDelete(post)}
@@ -859,7 +1092,7 @@ export default function AdminPage() {
                   })}
                 </div>
               )}
-            </Card>
+            </div>
           </div>
         </div>
       </div>

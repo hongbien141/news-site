@@ -9,15 +9,67 @@ type PageProps = {
   params: Promise<{ slug: string }>;
 };
 
-function parseJsonArray(value: string | null): string[] {
-  if (!value) return [];
+type VideoPayload =
+  | {
+      type: "upload";
+      url: string;
+    }
+  | {
+      type: "embed";
+      url: string;
+      provider: "x" | "telegram";
+    };
 
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
+function safeParseImages(value: unknown): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value.filter((v): v is string => typeof v === "string");
   }
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed)
+        ? parsed.filter((v): v is string => typeof v === "string")
+        : [];
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+}
+
+function safeParseVideos(value: unknown): VideoPayload[] {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value as VideoPayload[];
+  }
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+}
+
+function getEmbedUrl(video: VideoPayload) {
+  if (video.type !== "embed") return "";
+
+  if (video.provider === "telegram") {
+    const match = video.url.match(/^https?:\/\/t\.me\/([^/]+)\/(\d+)/i);
+    if (!match) return "";
+    const channel = match[1];
+    const postId = match[2];
+    return `https://t.me/${channel}/${postId}?embed=1`;
+  }
+
+  return `https://twitframe.com/show?url=${encodeURIComponent(video.url)}`;
 }
 
 export default async function PostDetailPage({ params }: PageProps) {
@@ -35,8 +87,8 @@ export default async function PostDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const images = parseJsonArray(post.images);
-  const videos = parseJsonArray(post.videos);
+  const images = safeParseImages(post.images);
+  const videos = safeParseVideos(post.videos);
 
   return (
     <main className="min-h-screen bg-[#f5f3ef] text-[#111]">
@@ -60,7 +112,7 @@ export default async function PostDetailPage({ params }: PageProps) {
         </h1>
 
         <p className="mt-6 text-lg text-gray-500">
-          {new Date(post.created_at).toLocaleDateString("vi-VN")} · hongbien141.io.vn
+          {new Date(post.created_at).toLocaleDateString("vi-VN")} · Hóng Biến 141
         </p>
 
         <div className="mt-6 border-t border-gray-300" />
@@ -84,14 +136,23 @@ export default async function PostDetailPage({ params }: PageProps) {
           ) : null}
 
           {videos.length > 0 ? (
-            <div className="mt-8 space-y-4">
+            <div className="mt-8 space-y-6">
               {videos.map((video, index) => (
-                <video
-                  key={index}
-                  controls
-                  className="w-full rounded-xl bg-black"
-                  src={video}
-                />
+                <div key={index}>
+                  {video.type === "upload" ? (
+                    <video
+                      controls
+                      className="w-full rounded-xl bg-black"
+                      src={video.url}
+                    />
+                  ) : (
+                    <iframe
+                      src={getEmbedUrl(video)}
+                      className="aspect-video w-full rounded-xl border"
+                      allowFullScreen
+                    />
+                  )}
+                </div>
               ))}
             </div>
           ) : null}
