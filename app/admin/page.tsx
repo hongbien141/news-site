@@ -124,6 +124,24 @@ async function uploadFile(file: File, folder: "post-images" | "post-videos" | "a
   return data.publicUrl;
 }
 
+async function uploadVideoViaApi(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch("/api/upload-video", {
+    method: "POST",
+    body: formData,
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data.error || "Upload video thất bại");
+  }
+
+  return data.url as string;
+}
+
 export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -172,7 +190,7 @@ export default function AdminPage() {
       setLoading(false);
     };
 
-    boot();
+    void boot();
   }, []);
 
   useEffect(() => {
@@ -207,7 +225,7 @@ export default function AdminPage() {
       return;
     }
 
-    const normalized = (data || []).map((item: any) => ({
+    const normalized = (data || []).map((item: Post) => ({
       ...item,
       images: safeParseImages(item.images),
       videos: safeParseVideos(item.videos),
@@ -420,7 +438,7 @@ export default function AdminPage() {
     for (const item of videos) {
       if (item.mode === "upload") {
         if (item.file) {
-          const url = await uploadFile(item.file, "post-videos");
+          const url = await uploadVideoViaApi(item.file);
           result.push({ type: "upload", url });
         } else if (item.existingUrl) {
           result.push({ type: "upload", url: item.existingUrl });
@@ -483,8 +501,9 @@ export default function AdminPage() {
       resetForm();
       await loadPosts();
       window.scrollTo({ top: 0, behavior: "smooth" });
-    } catch (error: any) {
-      alert("Lỗi: " + (error.message || "Không xác định"));
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Không xác định";
+      alert("Lỗi: " + message);
     } finally {
       setSubmitting(false);
     }
