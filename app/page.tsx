@@ -14,15 +14,25 @@ type Post = {
   created_at: string;
 };
 
-function parseJsonArray(value: string | null): string[] {
+function parseJsonArray(value: unknown): string[] {
   if (!value) return [];
 
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === "string");
   }
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed)
+        ? parsed.filter((item): item is string => typeof item === "string")
+        : [];
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
 }
 
 export default async function HomePage() {

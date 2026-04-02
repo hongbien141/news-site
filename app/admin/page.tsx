@@ -3,6 +3,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase-browser";
 
+type VideoPayload =
+  | {
+      type: "upload";
+      url: string;
+    }
+  | {
+      type: "embed";
+      url: string;
+      provider: "x" | "telegram";
+    };
+
 type Post = {
   id: number;
   title: string;
@@ -32,17 +43,6 @@ type VideoItem = {
   embedUrl: string;
   provider: "x" | "telegram";
 };
-
-type VideoPayload =
-  | {
-      type: "upload";
-      url: string;
-    }
-  | {
-      type: "embed";
-      url: string;
-      provider: "x" | "telegram";
-    };
 
 const inputClass =
   "w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none transition focus:border-red-300 focus:bg-white";
@@ -93,18 +93,6 @@ function safeParseVideos(value: unknown): VideoPayload[] {
   }
 
   return [];
-}
-
-function getEmbedPreviewUrl(provider: "x" | "telegram", url: string) {
-  if (!url.trim()) return "";
-
-  if (provider === "telegram") {
-    const match = url.match(/^https?:\/\/t\.me\/([^/]+)\/(\d+)/i);
-    if (!match) return "";
-    return `https://t.me/${match[1]}/${match[2]}?embed=1`;
-  }
-
-  return `https://twitframe.com/show?url=${encodeURIComponent(url)}`;
 }
 
 async function uploadFile(file: File, folder: "post-images" | "post-videos" | "ads") {
@@ -655,7 +643,7 @@ export default function AdminPage() {
                 CMS admin pro v1
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-gray-500">
-                Đăng bài, sửa bài, quản lý nhiều ảnh, video upload hoặc embed X/Telegram và popup quảng cáo.
+                Đăng bài, sửa bài, quản lý nhiều ảnh, video upload hoặc link X/Telegram và popup quảng cáo.
               </p>
             </div>
 
@@ -674,9 +662,7 @@ export default function AdminPage() {
             <div className={cardClass}>
               <div className="mb-5 flex items-center justify-between">
                 <div>
-                  <h2 className="text-2xl font-extrabold text-gray-900">
-                    Thông tin bài viết
-                  </h2>
+                  <h2 className="text-2xl font-extrabold text-gray-900">Thông tin bài viết</h2>
                   <p className="mt-1 text-sm text-gray-500">
                     Viết tiêu đề, slug, nội dung và trạng thái bài viết.
                   </p>
@@ -695,9 +681,7 @@ export default function AdminPage() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-800">
-                    Tiêu đề
-                  </label>
+                  <label className="mb-2 block text-sm font-semibold text-gray-800">Tiêu đề</label>
                   <input
                     className={inputClass}
                     value={title}
@@ -713,9 +697,7 @@ export default function AdminPage() {
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
-                    <label className="mb-2 block text-sm font-semibold text-gray-800">
-                      Slug
-                    </label>
+                    <label className="mb-2 block text-sm font-semibold text-gray-800">Slug</label>
                     <input
                       className={inputClass}
                       value={slug}
@@ -740,9 +722,7 @@ export default function AdminPage() {
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-800">
-                    Nội dung
-                  </label>
+                  <label className="mb-2 block text-sm font-semibold text-gray-800">Nội dung</label>
                   <textarea
                     className={textareaClass}
                     value={content}
@@ -755,9 +735,7 @@ export default function AdminPage() {
 
             <div className={cardClass}>
               <div className="mb-5">
-                <p className="text-sm font-bold uppercase tracking-[0.2em] text-red-500">
-                  HÌNH ẢNH
-                </p>
+                <p className="text-sm font-bold uppercase tracking-[0.2em] text-red-500">HÌNH ẢNH</p>
               </div>
 
               <div className="space-y-4">
@@ -804,9 +782,7 @@ export default function AdminPage() {
 
             <div className={cardClass}>
               <div className="mb-5">
-                <p className="text-sm font-bold uppercase tracking-[0.2em] text-red-500">
-                  VIDEO
-                </p>
+                <p className="text-sm font-bold uppercase tracking-[0.2em] text-red-500">VIDEO</p>
               </div>
 
               <div className="space-y-4">
@@ -846,7 +822,7 @@ export default function AdminPage() {
                             : "border border-gray-300 bg-white text-gray-700"
                         }`}
                       >
-                        Embed link
+                        Link ngoài
                       </button>
                     </div>
 
@@ -872,7 +848,9 @@ export default function AdminPage() {
                         <select
                           className={inputClass}
                           value={item.provider}
-                          onChange={(e) => updateVideoProvider(index, e.target.value as "x" | "telegram")}
+                          onChange={(e) =>
+                            updateVideoProvider(index, e.target.value as "x" | "telegram")
+                          }
                         >
                           <option value="x">X / Twitter</option>
                           <option value="telegram">Telegram</option>
@@ -885,16 +863,17 @@ export default function AdminPage() {
                           placeholder={
                             item.provider === "telegram"
                               ? "https://t.me/channelname/123"
-                              : "https://twitter.com/username/status/123456789"
+                              : "https://x.com/username/status/123456789"
                           }
                         />
 
                         {item.embedUrl.trim() ? (
-                          <iframe
-                            src={getEmbedPreviewUrl(item.provider, item.embedUrl)}
-                            className="aspect-video w-full rounded-2xl border bg-white"
-                            allowFullScreen
-                          />
+                          <div className="mt-3 rounded-2xl border border-gray-200 bg-white p-4 text-sm text-gray-600">
+                            <p className="font-medium text-gray-800">
+                              Đã lưu link {item.provider === "telegram" ? "Telegram" : "X / Twitter"}:
+                            </p>
+                            <p className="mt-2 break-all">{item.embedUrl}</p>
+                          </div>
                         ) : null}
                       </div>
                     )}
@@ -998,9 +977,7 @@ export default function AdminPage() {
             <div className={cardClass}>
               <div className="mb-5 flex items-center justify-between gap-4">
                 <div>
-                  <h2 className="text-2xl font-extrabold text-gray-900">
-                    Danh sách bài viết
-                  </h2>
+                  <h2 className="text-2xl font-extrabold text-gray-900">Danh sách bài viết</h2>
                   <p className="mt-1 text-sm text-gray-500">
                     Tìm kiếm, lọc, sửa và xóa bài viết.
                   </p>
@@ -1051,9 +1028,7 @@ export default function AdminPage() {
                               {post.title}
                             </h3>
                             <p className="mt-1 text-sm text-gray-500">/{post.slug}</p>
-                            <p className="mt-2 text-sm text-gray-500">
-                              Trạng thái: {post.status}
-                            </p>
+                            <p className="mt-2 text-sm text-gray-500">Trạng thái: {post.status}</p>
                             {post.created_at ? (
                               <p className="mt-1 text-sm text-gray-500">
                                 {new Date(post.created_at).toLocaleString("vi-VN")}

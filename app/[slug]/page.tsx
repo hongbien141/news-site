@@ -58,18 +58,8 @@ function safeParseVideos(value: unknown): VideoPayload[] {
   return [];
 }
 
-function getEmbedUrl(video: VideoPayload) {
-  if (video.type !== "embed") return "";
-
-  if (video.provider === "telegram") {
-    const match = video.url.match(/^https?:\/\/t\.me\/([^/]+)\/(\d+)/i);
-    if (!match) return "";
-    const channel = match[1];
-    const postId = match[2];
-    return `https://t.me/${channel}/${postId}?embed=1`;
-  }
-
-  return `https://twitframe.com/show?url=${encodeURIComponent(video.url)}`;
+function getVideoLabel(video: Extract<VideoPayload, { type: "embed" }>) {
+  return video.provider === "telegram" ? "Telegram" : "X / Twitter";
 }
 
 export default async function PostDetailPage({ params }: PageProps) {
@@ -146,11 +136,20 @@ export default async function PostDetailPage({ params }: PageProps) {
                       src={video.url}
                     />
                   ) : (
-                    <iframe
-                      src={getEmbedUrl(video)}
-                      className="aspect-video w-full rounded-xl border"
-                      allowFullScreen
-                    />
+                    <a
+                      href={video.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block rounded-2xl border border-gray-200 bg-gray-50 p-5 transition hover:border-red-300 hover:bg-white"
+                    >
+                      <p className="text-sm font-bold uppercase tracking-[0.2em] text-red-500">
+                        Video ngoài
+                      </p>
+                      <h3 className="mt-2 text-xl font-bold text-gray-900">
+                        Mở video trên {getVideoLabel(video)}
+                      </h3>
+                      <p className="mt-3 break-all text-sm text-gray-600">{video.url}</p>
+                    </a>
                   )}
                 </div>
               ))}
