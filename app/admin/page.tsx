@@ -3,15 +3,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase-browser";
 
+type ImagePayload = {
+  url: string;
+  sensitive?: boolean;
+};
+
 type VideoPayload =
   | {
       type: "upload";
       url: string;
+      sensitive?: boolean;
     }
   | {
       type: "embed";
       url: string;
       provider: "x" | "telegram";
+      sensitive?: boolean;
     };
 
 type Post = {
@@ -20,7 +27,7 @@ type Post = {
   slug: string;
   content: string;
   status: string;
-  images: string[] | null;
+  images: ImagePayload[] | null;
   videos: VideoPayload[] | null;
   popup_link?: string | null;
   ad_title?: string | null;
@@ -33,6 +40,7 @@ type ImageItem = {
   file: File | null;
   preview: string;
   existingUrl?: string;
+  sensitive: boolean;
 };
 
 type VideoItem = {
@@ -42,6 +50,7 @@ type VideoItem = {
   existingUrl?: string;
   embedUrl: string;
   provider: "x" | "telegram";
+  sensitive: boolean;
 };
 
 const inputClass =
@@ -63,14 +72,40 @@ function slugify(text: string) {
     .replace(/^-+|-+$/g, "");
 }
 
-function safeParseImages(value: unknown): string[] {
+function safeParseImages(value: unknown): ImagePayload[] {
   if (!value) return [];
-  if (Array.isArray(value)) return value.filter((v): v is string => typeof v === "string");
+
+  const normalize = (item: unknown): ImagePayload | null => {
+    if (typeof item === "string") {
+      return { url: item, sensitive: false };
+    }
+
+    if (
+      item &&
+      typeof item === "object" &&
+      "url" in item &&
+      typeof (item as { url?: unknown }).url === "string"
+    ) {
+      const typed = item as { url: string; sensitive?: boolean };
+      return {
+        url: typed.url,
+        sensitive: !!typed.sensitive,
+      };
+    }
+
+    return null;
+  };
+
+  if (Array.isArray(value)) {
+    return value.map(normalize).filter((item): item is ImagePayload => !!item);
+  }
 
   if (typeof value === "string") {
     try {
       const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : [];
+      return Array.isArray(parsed)
+        ? parsed.map(normalize).filter((item): item is ImagePayload => !!item)
+        : [];
     } catch {
       return [];
     }
@@ -81,12 +116,51 @@ function safeParseImages(value: unknown): string[] {
 
 function safeParseVideos(value: unknown): VideoPayload[] {
   if (!value) return [];
-  if (Array.isArray(value)) return value as VideoPayload[];
+
+  const normalize = (item: unknown): VideoPayload | null => {
+    if (!item || typeof item !== "object") return null;
+
+    const typed = item as {
+      type?: unknown;
+      url?: unknown;
+      provider?: unknown;
+      sensitive?: unknown;
+    };
+
+    if (typed.type === "upload" && typeof typed.url === "string") {
+      return {
+        type: "upload",
+        url: typed.url,
+        sensitive: !!typed.sensitive,
+      };
+    }
+
+    if (
+      typed.type === "embed" &&
+      typeof typed.url === "string" &&
+      (typed.provider === "x" || typed.provider === "telegram")
+    ) {
+      return {
+        type: "embed",
+        url: typed.url,
+        provider: typed.provider,
+        sensitive: !!typed.sensitive,
+      };
+    }
+
+    return null;
+  };
+
+  if (Array.isArray(value)) {
+    return value.map(normalize).filter((item): item is VideoPayload => !!item);
+  }
 
   if (typeof value === "string") {
     try {
       const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? parsed : [];
+      return Array.isArray(parsed)
+        ? parsed.map(normalize).filter((item): item is VideoPayload => !!item)
+        : [];
     } catch {
       return [];
     }
@@ -164,17 +238,24 @@ async function uploadVideoViaApi(file: File) {
     throw new Error("Thiếu uploadUrl hoặc publicUrl");
   }
 
-  const uploadRes = await fetch(presignData.uploadUrl, {
-    method: "PUT",
-    headers: {
-      "Content-Type": file.type,
-    },
-    body: file,
-  });
+  try {
+    const uploadRes = await fetch(presignData.uploadUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": file.type,
+      },
+      body: file,
+    });
 
-  if (!uploadRes.ok) {
-    const uploadText = await uploadRes.text();
-    throw new Error(uploadText || "Upload trực tiếp lên R2 thất bại");
+    if (!uploadRes.ok) {
+      const uploadText = await uploadRes.text();
+      throw new Error(uploadText || `Upload trực tiếp lên R2 thất bại (${uploadRes.status})`);
+    }
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(`Upload lên R2 lỗi: ${error.message}`);
+    }
+    throw new Error("Upload lên R2 bị chặn hoặc thất bại");
   }
 
   return presignData.publicUrl;
@@ -207,7 +288,9 @@ export default function AdminPage() {
   const [adImagePreview, setAdImagePreview] = useState("");
   const [existingAdImage, setExistingAdImage] = useState("");
 
-  const [images, setImages] = useState<ImageItem[]>([{ file: null, preview: "" }]);
+  const [images, setImages] = useState<ImageItem[]>([
+    { file: null, preview: "", sensitive: false },
+  ]);
 
   const [videos, setVideos] = useState<VideoItem[]>([
     {
@@ -216,6 +299,7 @@ export default function AdminPage() {
       preview: "",
       embedUrl: "",
       provider: "x",
+      sensitive: false,
     },
   ]);
 
@@ -263,7 +347,10 @@ export default function AdminPage() {
       return;
     }
 
-    const normalized = (data || []).map((item: Post) => ({
+    const normalized = (data || []).map((item: Omit<Post, "images" | "videos"> & {
+      images: unknown;
+      videos: unknown;
+    }) => ({
       ...item,
       images: safeParseImages(item.images),
       videos: safeParseVideos(item.videos),
@@ -304,7 +391,7 @@ export default function AdminPage() {
     setAdImageFile(null);
     setAdImagePreview("");
     setExistingAdImage("");
-    setImages([{ file: null, preview: "" }]);
+    setImages([{ file: null, preview: "", sensitive: false }]);
     setVideos([
       {
         mode: "upload",
@@ -312,12 +399,13 @@ export default function AdminPage() {
         preview: "",
         embedUrl: "",
         provider: "x",
+        sensitive: false,
       },
     ]);
   }
 
   function addImage() {
-    setImages((prev) => [...prev, { file: null, preview: "" }]);
+    setImages((prev) => [...prev, { file: null, preview: "", sensitive: false }]);
   }
 
   function removeImage(index: number) {
@@ -327,7 +415,7 @@ export default function AdminPage() {
         URL.revokeObjectURL(target.preview);
       }
       const next = prev.filter((_, i) => i !== index);
-      return next.length ? next : [{ file: null, preview: "" }];
+      return next.length ? next : [{ file: null, preview: "", sensitive: false }];
     });
   }
 
@@ -341,11 +429,23 @@ export default function AdminPage() {
       }
 
       next[index] = {
+        ...old,
         file,
         preview: file ? URL.createObjectURL(file) : old?.existingUrl || "",
         existingUrl: file ? undefined : old?.existingUrl,
       };
 
+      return next;
+    });
+  }
+
+  function updateImageSensitive(index: number, sensitive: boolean) {
+    setImages((prev) => {
+      const next = [...prev];
+      next[index] = {
+        ...next[index],
+        sensitive,
+      };
       return next;
     });
   }
@@ -359,6 +459,7 @@ export default function AdminPage() {
         preview: "",
         embedUrl: "",
         provider: "x",
+        sensitive: false,
       },
     ]);
   }
@@ -380,6 +481,7 @@ export default function AdminPage() {
               preview: "",
               embedUrl: "",
               provider: "x",
+              sensitive: false,
             },
           ];
     });
@@ -455,15 +557,32 @@ export default function AdminPage() {
     });
   }
 
+  function updateVideoSensitive(index: number, sensitive: boolean) {
+    setVideos((prev) => {
+      const next = [...prev];
+      next[index] = {
+        ...next[index],
+        sensitive,
+      };
+      return next;
+    });
+  }
+
   async function uploadImages() {
-    const result: string[] = [];
+    const result: ImagePayload[] = [];
 
     for (const item of images) {
       if (item.file) {
         const url = await uploadFile(item.file, "post-images");
-        result.push(url);
+        result.push({
+          url,
+          sensitive: item.sensitive,
+        });
       } else if (item.existingUrl) {
-        result.push(item.existingUrl);
+        result.push({
+          url: item.existingUrl,
+          sensitive: item.sensitive,
+        });
       }
     }
 
@@ -477,9 +596,17 @@ export default function AdminPage() {
       if (item.mode === "upload") {
         if (item.file) {
           const url = await uploadVideoViaApi(item.file);
-          result.push({ type: "upload", url });
+          result.push({
+            type: "upload",
+            url,
+            sensitive: item.sensitive,
+          });
         } else if (item.existingUrl) {
-          result.push({ type: "upload", url: item.existingUrl });
+          result.push({
+            type: "upload",
+            url: item.existingUrl,
+            sensitive: item.sensitive,
+          });
         }
       }
 
@@ -488,6 +615,7 @@ export default function AdminPage() {
           type: "embed",
           url: item.embedUrl.trim(),
           provider: item.provider,
+          sensitive: item.sensitive,
         });
       }
     }
@@ -562,12 +690,13 @@ export default function AdminPage() {
 
     setImages(
       post.images && post.images.length
-        ? post.images.map((url) => ({
+        ? post.images.map((item) => ({
             file: null,
-            preview: url,
-            existingUrl: url,
+            preview: item.url,
+            existingUrl: item.url,
+            sensitive: !!item.sensitive,
           }))
-        : [{ file: null, preview: "" }]
+        : [{ file: null, preview: "", sensitive: false }]
     );
 
     setVideos(
@@ -581,6 +710,7 @@ export default function AdminPage() {
                 existingUrl: item.url,
                 embedUrl: "",
                 provider: "x" as const,
+                sensitive: !!item.sensitive,
               };
             }
 
@@ -591,6 +721,7 @@ export default function AdminPage() {
               existingUrl: undefined,
               embedUrl: item.url,
               provider: item.provider || "x",
+              sensitive: !!item.sensitive,
             };
           })
         : [
@@ -600,6 +731,7 @@ export default function AdminPage() {
               preview: "",
               embedUrl: "",
               provider: "x",
+              sensitive: false,
             },
           ]
     );
@@ -817,6 +949,15 @@ export default function AdminPage() {
                       className="w-full"
                     />
 
+                    <label className="mt-3 flex items-center gap-2 text-sm font-medium text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={item.sensitive}
+                        onChange={(e) => updateImageSensitive(index, e.target.checked)}
+                      />
+                      Đánh dấu nội dung nhạy cảm
+                    </label>
+
                     {item.preview ? (
                       <img
                         src={item.preview}
@@ -882,6 +1023,15 @@ export default function AdminPage() {
                         Link ngoài
                       </button>
                     </div>
+
+                    <label className="mb-3 flex items-center gap-2 text-sm font-medium text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={item.sensitive}
+                        onChange={(e) => updateVideoSensitive(index, e.target.checked)}
+                      />
+                      Đánh dấu nội dung nhạy cảm
+                    </label>
 
                     {item.mode === "upload" ? (
                       <>
@@ -1075,7 +1225,7 @@ export default function AdminPage() {
               ) : (
                 <div className="space-y-4">
                   {filteredPosts.map((post) => {
-                    const firstImage = post.images?.[0] || "";
+                    const firstImage = post.images?.[0]?.url || "";
 
                     return (
                       <div key={post.id} className="rounded-2xl border border-gray-200 p-4">

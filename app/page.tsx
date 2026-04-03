@@ -4,6 +4,11 @@ export const revalidate = 0;
 import Link from "next/link";
 import { createSupabaseServer } from "@/lib/supabase";
 
+type ImagePayload = {
+  url: string;
+  sensitive?: boolean;
+};
+
 type Post = {
   id: number;
   title: string;
@@ -14,18 +19,39 @@ type Post = {
   created_at: string;
 };
 
-function parseJsonArray(value: unknown): string[] {
+function parseImages(value: unknown): ImagePayload[] {
   if (!value) return [];
 
+  const normalize = (item: unknown): ImagePayload | null => {
+    if (typeof item === "string") {
+      return { url: item, sensitive: false };
+    }
+
+    if (
+      item &&
+      typeof item === "object" &&
+      "url" in item &&
+      typeof (item as { url?: unknown }).url === "string"
+    ) {
+      const typed = item as { url: string; sensitive?: boolean };
+      return {
+        url: typed.url,
+        sensitive: !!typed.sensitive,
+      };
+    }
+
+    return null;
+  };
+
   if (Array.isArray(value)) {
-    return value.filter((item): item is string => typeof item === "string");
+    return value.map(normalize).filter((item): item is ImagePayload => !!item);
   }
 
   if (typeof value === "string") {
     try {
       const parsed = JSON.parse(value);
       return Array.isArray(parsed)
-        ? parsed.filter((item): item is string => typeof item === "string")
+        ? parsed.map(normalize).filter((item): item is ImagePayload => !!item)
         : [];
     } catch {
       return [];
@@ -68,8 +94,8 @@ export default async function HomePage() {
         <div className="mt-10 space-y-7">
           {posts && posts.length > 0 ? (
             posts.map((post: Post) => {
-              const images = parseJsonArray(post.images);
-              const thumbnail = images[0] || "";
+              const images = parseImages(post.images);
+              const thumbnail = images[0]?.url || "";
 
               return (
                 <Link
@@ -104,7 +130,7 @@ export default async function HomePage() {
               );
             })
           ) : (
-            <div className="rounded-2xl bg-white p-6 shadow-sm text-gray-500">
+            <div className="rounded-2xl bg-white p-6 text-gray-500 shadow-sm">
               Chưa có bài viết nào.
             </div>
           )}

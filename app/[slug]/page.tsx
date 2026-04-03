@@ -5,20 +5,28 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabase";
 import AdPopup from "../components/AdPopup";
+import SensitiveMedia from "../components/SensitiveMedia";
 
 type PageProps = {
   params: Promise<{ slug: string }>;
+};
+
+type ImagePayload = {
+  url: string;
+  sensitive?: boolean;
 };
 
 type VideoPayload =
   | {
       type: "upload";
       url: string;
+      sensitive?: boolean;
     }
   | {
       type: "embed";
       url: string;
       provider: "x" | "telegram";
+      sensitive?: boolean;
     };
 
 type AdjacentPost = {
@@ -27,17 +35,39 @@ type AdjacentPost = {
   created_at: string;
 };
 
-function safeParseImages(value: unknown): string[] {
+function safeParseImages(value: unknown): ImagePayload[] {
   if (!value) return [];
+
+  const normalize = (item: unknown): ImagePayload | null => {
+    if (typeof item === "string") {
+      return { url: item, sensitive: false };
+    }
+
+    if (
+      item &&
+      typeof item === "object" &&
+      "url" in item &&
+      typeof (item as { url?: unknown }).url === "string"
+    ) {
+      const typed = item as { url: string; sensitive?: boolean };
+      return {
+        url: typed.url,
+        sensitive: !!typed.sensitive,
+      };
+    }
+
+    return null;
+  };
+
   if (Array.isArray(value)) {
-    return value.filter((v): v is string => typeof v === "string");
+    return value.map(normalize).filter((item): item is ImagePayload => !!item);
   }
 
   if (typeof value === "string") {
     try {
       const parsed = JSON.parse(value);
       return Array.isArray(parsed)
-        ? parsed.filter((v): v is string => typeof v === "string")
+        ? parsed.map(normalize).filter((item): item is ImagePayload => !!item)
         : [];
     } catch {
       return [];
@@ -49,14 +79,51 @@ function safeParseImages(value: unknown): string[] {
 
 function safeParseVideos(value: unknown): VideoPayload[] {
   if (!value) return [];
+
+  const normalize = (item: unknown): VideoPayload | null => {
+    if (!item || typeof item !== "object") return null;
+
+    const typed = item as {
+      type?: unknown;
+      url?: unknown;
+      provider?: unknown;
+      sensitive?: unknown;
+    };
+
+    if (typed.type === "upload" && typeof typed.url === "string") {
+      return {
+        type: "upload",
+        url: typed.url,
+        sensitive: !!typed.sensitive,
+      };
+    }
+
+    if (
+      typed.type === "embed" &&
+      typeof typed.url === "string" &&
+      (typed.provider === "x" || typed.provider === "telegram")
+    ) {
+      return {
+        type: "embed",
+        url: typed.url,
+        provider: typed.provider,
+        sensitive: !!typed.sensitive,
+      };
+    }
+
+    return null;
+  };
+
   if (Array.isArray(value)) {
-    return value as VideoPayload[];
+    return value.map(normalize).filter((item): item is VideoPayload => !!item);
   }
 
   if (typeof value === "string") {
     try {
       const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? parsed : [];
+      return Array.isArray(parsed)
+        ? parsed.map(normalize).filter((item): item is VideoPayload => !!item)
+        : [];
     } catch {
       return [];
     }
@@ -142,12 +209,18 @@ export default async function PostDetailPage({ params }: PageProps) {
           {images.length > 0 ? (
             <div className="mt-8 space-y-4">
               {images.map((image, index) => (
-                <img
+                <SensitiveMedia
                   key={index}
-                  src={image}
-                  alt={`${post.title} ${index + 1}`}
-                  className="w-full rounded-xl object-cover"
-                />
+                  sensitive={!!image.sensitive}
+                  label="Hình ảnh nhạy cảm, cân nhắc trước khi xem."
+                  className="rounded-xl"
+                >
+                  <img
+                    src={image.url}
+                    alt={`${post.title} ${index + 1}`}
+                    className="w-full rounded-xl object-cover"
+                  />
+                </SensitiveMedia>
               ))}
             </div>
           ) : null}
@@ -157,33 +230,45 @@ export default async function PostDetailPage({ params }: PageProps) {
               {videos.map((video, index) => (
                 <div key={index}>
                   {video.type === "upload" ? (
-                    <video
-                      controls
-                      className="w-full rounded-xl bg-black"
-                      src={video.url}
-                    />
-                  ) : (
-                    <a
-                      href={video.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block rounded-2xl border border-gray-200 bg-gray-50 p-5 transition hover:border-red-300 hover:bg-white"
+                    <SensitiveMedia
+                      sensitive={!!video.sensitive}
+                      label="Video nhạy cảm, cân nhắc trước khi xem."
+                      className="rounded-xl"
                     >
-                      <p className="text-sm font-bold uppercase tracking-[0.2em] text-red-500">
-                        Video ngoài
-                      </p>
-                      <h3 className="mt-2 text-xl font-bold text-gray-900">
-                        Mở video trên {getVideoLabel(video)}
-                      </h3>
-                      <p className="mt-3 break-all text-sm text-gray-600">{video.url}</p>
-                    </a>
+                      <video
+                        controls
+                        className="w-full rounded-xl bg-black"
+                        src={video.url}
+                      />
+                    </SensitiveMedia>
+                  ) : (
+                    <SensitiveMedia
+                      sensitive={!!video.sensitive}
+                      label="Liên kết video có nội dung nhạy cảm, cân nhắc trước khi xem."
+                      className="rounded-2xl"
+                    >
+                      <a
+                        href={video.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block rounded-2xl border border-gray-200 bg-gray-50 p-5 transition hover:border-red-300 hover:bg-white"
+                      >
+                        <p className="text-sm font-bold uppercase tracking-[0.2em] text-red-500">
+                          Video ngoài
+                        </p>
+                        <h3 className="mt-2 text-xl font-bold text-gray-900">
+                          Mở video trên {getVideoLabel(video)}
+                        </h3>
+                        <p className="mt-3 break-all text-sm text-gray-600">{video.url}</p>
+                      </a>
+                    </SensitiveMedia>
                   )}
                 </div>
               ))}
             </div>
           ) : null}
 
-          {(previousPost || nextPost) ? (
+          {previousPost || nextPost ? (
             <div className="mt-10 border-t border-gray-200 pt-6">
               <div className="grid gap-4 md:grid-cols-2">
                 {previousPost ? (
