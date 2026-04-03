@@ -133,13 +133,25 @@ async function uploadVideoViaApi(file: File) {
     body: formData,
   });
 
-  const data = await res.json();
+  const text = await res.text();
+
+  let data: { url?: string; error?: string } = {};
+
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(text || "Upload video thất bại");
+  }
 
   if (!res.ok) {
     throw new Error(data.error || "Upload video thất bại");
   }
 
-  return data.url as string;
+  if (!data.url) {
+    throw new Error("Không nhận được URL video từ server");
+  }
+
+  return data.url;
 }
 
 export default function AdminPage() {
