@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabase";
 import AdPopup from "../components/AdPopup";
@@ -19,6 +20,12 @@ type VideoPayload =
       url: string;
       provider: "x" | "telegram";
     };
+
+type AdjacentPost = {
+  slug: string;
+  title: string;
+  created_at: string;
+};
 
 function safeParseImages(value: unknown): string[] {
   if (!value) return [];
@@ -79,6 +86,26 @@ export default async function PostDetailPage({ params }: PageProps) {
 
   const images = safeParseImages(post.images);
   const videos = safeParseVideos(post.videos);
+
+  const [{ data: previousPost }, { data: nextPost }] = await Promise.all([
+    supabase
+      .from("posts")
+      .select("slug,title,created_at")
+      .eq("status", "published")
+      .lt("created_at", post.created_at)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle<AdjacentPost>(),
+
+    supabase
+      .from("posts")
+      .select("slug,title,created_at")
+      .eq("status", "published")
+      .gt("created_at", post.created_at)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle<AdjacentPost>(),
+  ]);
 
   return (
     <main className="min-h-screen bg-[#f5f3ef] text-[#111]">
@@ -153,6 +180,48 @@ export default async function PostDetailPage({ params }: PageProps) {
                   )}
                 </div>
               ))}
+            </div>
+          ) : null}
+
+          {(previousPost || nextPost) ? (
+            <div className="mt-10 border-t border-gray-200 pt-6">
+              <div className="grid gap-4 md:grid-cols-2">
+                {previousPost ? (
+                  <Link
+                    href={`/${previousPost.slug}`}
+                    className="block rounded-2xl border border-gray-200 bg-gray-50 p-5 transition hover:border-red-300 hover:bg-white"
+                  >
+                    <p className="text-sm font-bold uppercase tracking-[0.2em] text-red-500">
+                      ← Trang trước
+                    </p>
+                    <h3 className="mt-2 line-clamp-2 text-lg font-bold text-gray-900">
+                      {previousPost.title}
+                    </h3>
+                    <p className="mt-3 text-sm text-gray-500">
+                      {new Date(previousPost.created_at).toLocaleDateString("vi-VN")}
+                    </p>
+                  </Link>
+                ) : (
+                  <div />
+                )}
+
+                {nextPost ? (
+                  <Link
+                    href={`/${nextPost.slug}`}
+                    className="block rounded-2xl border border-gray-200 bg-gray-50 p-5 text-left transition hover:border-red-300 hover:bg-white"
+                  >
+                    <p className="text-sm font-bold uppercase tracking-[0.2em] text-red-500 md:text-right">
+                      Trang sau →
+                    </p>
+                    <h3 className="mt-2 line-clamp-2 text-lg font-bold text-gray-900 md:text-right">
+                      {nextPost.title}
+                    </h3>
+                    <p className="mt-3 text-sm text-gray-500 md:text-right">
+                      {new Date(nextPost.created_at).toLocaleDateString("vi-VN")}
+                    </p>
+                  </Link>
+                ) : null}
+              </div>
             </div>
           ) : null}
         </div>
