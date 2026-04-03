@@ -125,33 +125,59 @@ async function uploadFile(file: File, folder: "post-images" | "post-videos" | "a
 }
 
 async function uploadVideoViaApi(file: File) {
-  const formData = new FormData();
-  formData.append("file", file);
+  const MAX_SIZE = 200 * 1024 * 1024;
 
-  const res = await fetch("/api/upload-video", {
+  if (!["video/mp4", "video/webm", "video/ogg"].includes(file.type)) {
+    throw new Error("Chỉ hỗ trợ mp4, webm, ogg");
+  }
+
+  if (file.size > MAX_SIZE) {
+    throw new Error("Video vượt quá 200MB");
+  }
+
+  const presignRes = await fetch("/api/r2-presign", {
     method: "POST",
-    body: formData,
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      fileName: file.name,
+      contentType: file.type,
+    }),
   });
 
-  const text = await res.text();
+  const presignText = await presignRes.text();
 
-  let data: { url?: string; error?: string } = {};
+  let presignData: { uploadUrl?: string; publicUrl?: string; error?: string } = {};
 
   try {
-    data = JSON.parse(text);
+    presignData = JSON.parse(presignText);
   } catch {
-    throw new Error(text || "Upload video thất bại");
+    throw new Error(presignText || "Không tạo được URL upload");
   }
 
-  if (!res.ok) {
-    throw new Error(data.error || "Upload video thất bại");
+  if (!presignRes.ok) {
+    throw new Error(presignData.error || "Không tạo được URL upload");
   }
 
-  if (!data.url) {
-    throw new Error("Không nhận được URL video từ server");
+  if (!presignData.uploadUrl || !presignData.publicUrl) {
+    throw new Error("Thiếu uploadUrl hoặc publicUrl");
   }
 
-  return data.url;
+  const uploadRes = await fetch(presignData.uploadUrl, {
+    method: "PUT",
+    headers: {
+      "Content-Type": file.type,
+    },
+    body: file,
+  });
+
+  if (!uploadRes.ok) {
+    const uploadText = await uploadRes.text();
+    throw new Error(uploadText || "Upload trực tiếp lên R2 thất bại");
+  }
+
+  return presignData.publicUrl;
 }
 
 export default function AdminPage() {

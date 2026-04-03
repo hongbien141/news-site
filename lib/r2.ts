@@ -1,4 +1,5 @@
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const accountId = process.env.CF_ACCOUNT_ID!;
 const accessKeyId = process.env.CF_ACCESS_KEY_ID!;
@@ -32,20 +33,40 @@ function sanitizeFileName(name: string) {
   };
 }
 
-export async function uploadVideoToR2(file: File) {
-  const { ext, safeBase } = sanitizeFileName(file.name);
-  const key = `post-videos/${Date.now()}-${safeBase}.${ext}`;
+export function buildR2VideoKey(fileName: string) {
+  const { ext, safeBase } = sanitizeFileName(fileName);
+  return `post-videos/${Date.now()}-${safeBase}.${ext}`;
+}
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-
-  await r2.send(
-    new PutObjectCommand({
-      Bucket: bucketName,
-      Key: key,
-      Body: buffer,
-      ContentType: file.type || "video/mp4",
-    })
-  );
-
+export function buildR2PublicUrl(key: string) {
   return `${publicBaseUrl}/${key}`;
+}
+
+export async function createPresignedUploadUrl(params: {
+  key: string;
+  contentType: string;
+}) {
+  const command = new PutObjectCommand({
+    Bucket: bucketName,
+    Key: params.key,
+    ContentType: params.contentType || "video/mp4",
+  });
+
+  const uploadUrl = await getSignedUrl(r2, command, {
+    expiresIn: 60 * 5,
+  });
+
+  return uploadUrl;
+}
+
+// Không bắt buộc dùng ngay, nhưng để sẵn nếu sau này cần presigned GET
+export async function createPresignedReadUrl(key: string) {
+  const command = new GetObjectCommand({
+    Bucket: bucketName,
+    Key: key,
+  });
+
+  return getSignedUrl(r2, command, {
+    expiresIn: 60 * 5,
+  });
 }
