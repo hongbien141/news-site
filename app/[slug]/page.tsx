@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabase";
@@ -34,6 +35,10 @@ type AdjacentPost = {
   title: string;
   created_at: string;
 };
+
+const siteName = "Hóng Biến 141";
+const siteUrl = "https://hongbien141.io.vn";
+const defaultOgImage = `${siteUrl}/og-default.jpg`;
 
 function safeParseImages(value: unknown): ImagePayload[] {
   if (!value) return [];
@@ -134,6 +139,60 @@ function safeParseVideos(value: unknown): VideoPayload[] {
 
 function getVideoLabel(video: Extract<VideoPayload, { type: "embed" }>) {
   return video.provider === "telegram" ? "Telegram" : "X / Twitter";
+}
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const supabase = createSupabaseServer();
+
+  const { data: post } = await supabase
+    .from("posts")
+    .select("*")
+    .eq("slug", slug)
+    .eq("status", "published")
+    .single();
+
+  if (!post) {
+    return {
+      title: siteName,
+      description: "Trang tin tức tổng hợp Hóng Biến 141",
+    };
+  }
+
+  const images = safeParseImages(post.images);
+  const firstImage = images[0]?.url || defaultOgImage;
+  const title = post.title || siteName;
+  const description =
+    (post.content || "").replace(/\s+/g, " ").trim().slice(0, 180) ||
+    "Trang tin tức tổng hợp Hóng Biến 141";
+  const url = `${siteUrl}/${post.slug}`;
+
+  return {
+    title,
+    description,
+    openGraph: {
+      type: "article",
+      locale: "vi_VN",
+      url,
+      siteName,
+      title,
+      description,
+      images: [
+        {
+          url: firstImage,
+          width: 1200,
+          height: 630,
+          alt: title,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [firstImage],
+    },
+  };
 }
 
 export default async function PostDetailPage({ params }: PageProps) {
@@ -267,6 +326,34 @@ export default async function PostDetailPage({ params }: PageProps) {
               ))}
             </div>
           ) : null}
+
+          <div className="mt-10 border-t border-gray-300 pt-8 text-center">
+            <p className="text-xl font-semibold text-gray-900">
+              Group Tele:{" "}
+              <a
+                href="https://t.me/hongbien141"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-red-600"
+              >
+                tham gia
+              </a>{" "}
+              – Group FB:{" "}
+              <a
+                href="https://www.facebook.com/hongbien141"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-red-600"
+              >
+                tham gia
+              </a>
+            </p>
+
+            <p className="mx-auto mt-6 max-w-4xl text-center text-2xl font-extrabold italic leading-10 text-red-600">
+              Bài viết chỉ mang tính chất giải trí, truyền tải thông tin HOẶC lên án – cảnh báo về
+              những hành vi chưa chuẩn mực, không cổ súy hành động theo, cảm ơn!
+            </p>
+          </div>
 
           {previousPost || nextPost ? (
             <div className="mt-10 border-t border-gray-200 pt-6">
