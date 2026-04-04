@@ -338,7 +338,7 @@ export default async function PostDetailPage({ params }: PageProps) {
               >
                 tham gia
               </a>{" "}
-              – Group FB:{" "}
+              – Fanpage FB:{" "}
               <a
                 href="https://www.facebook.com/hongbien141"
                 target="_blank"
