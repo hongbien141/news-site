@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase-browser";
 
 type ImagePayload = {
@@ -261,6 +262,31 @@ async function uploadVideoViaApi(file: File) {
   }
 
   return presignData.publicUrl;
+}
+
+function Badge({
+  children,
+  tone = "gray",
+}: {
+  children: React.ReactNode;
+  tone?: "gray" | "green" | "yellow" | "red" | "blue" | "purple";
+}) {
+  const toneMap = {
+    gray: "bg-gray-100 text-gray-700",
+    green: "bg-green-50 text-green-700",
+    yellow: "bg-yellow-50 text-yellow-700",
+    red: "bg-red-50 text-red-700",
+    blue: "bg-blue-50 text-blue-700",
+    purple: "bg-purple-50 text-purple-700",
+  };
+
+  return (
+    <span
+      className={`inline-flex rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${toneMap[tone]}`}
+    >
+      {children}
+    </span>
+  );
 }
 
 export default function AdminPage() {
@@ -851,10 +877,10 @@ export default function AdminPage() {
                 ADMIN
               </div>
               <h1 className="mt-4 text-4xl font-extrabold tracking-tight text-gray-900 md:text-5xl">
-                CMS admin pro v2
+                CMS admin pro v3
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-gray-500">
-                Đăng bài, sửa bài, quản lý media, đánh dấu nội dung nhạy cảm, phân trang bài viết và popup quảng cáo.
+                Quản trị bài viết gọn hơn, rõ hơn, có thumbnail, badge trạng thái, phân trang và điều hướng nhanh ra frontend.
               </p>
             </div>
 
@@ -1208,7 +1234,7 @@ export default function AdminPage() {
                 <div>
                   <h2 className="text-2xl font-extrabold text-gray-900">Danh sách bài viết</h2>
                   <p className="mt-1 text-sm text-gray-500">
-                    Quản lý bài viết gọn hơn, mỗi trang 7 bài mới nhất.
+                    Thumbnail nhỏ, badge rõ ràng, quản lý nhanh hơn.
                   </p>
                 </div>
 
@@ -1221,7 +1247,7 @@ export default function AdminPage() {
                 </button>
               </div>
 
-              <div className="mb-4 grid gap-3 md:grid-cols-2">
+              <div className="mb-4 grid gap-3 md:grid-cols-[1fr_auto]">
                 <input
                   className={inputClass}
                   value={search}
@@ -1238,6 +1264,44 @@ export default function AdminPage() {
                   <option value="published">published</option>
                   <option value="draft">draft</option>
                 </select>
+              </div>
+
+              <div className="mb-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter("all")}
+                  className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                    statusFilter === "all"
+                      ? "bg-black text-white"
+                      : "border border-gray-300 bg-white text-gray-700"
+                  }`}
+                >
+                  Tất cả
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter("published")}
+                  className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                    statusFilter === "published"
+                      ? "bg-green-600 text-white"
+                      : "border border-gray-300 bg-white text-gray-700"
+                  }`}
+                >
+                  Published
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter("draft")}
+                  className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                    statusFilter === "draft"
+                      ? "bg-yellow-500 text-white"
+                      : "border border-gray-300 bg-white text-gray-700"
+                  }`}
+                >
+                  Draft
+                </button>
               </div>
 
               <div className="mb-4 flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
@@ -1258,76 +1322,95 @@ export default function AdminPage() {
                   <div className="space-y-4">
                     {paginatedPosts.map((post) => {
                       const firstImage = post.images?.[0]?.url || "";
+                      const hasImages = !!post.images?.length;
+                      const hasVideos = !!post.videos?.length;
+                      const hasPopup = !!post.popup_link;
+                      const hasSensitive =
+                        !!post.images?.some((item) => item.sensitive) ||
+                        !!post.videos?.some((item) => item.sensitive);
 
                       return (
                         <div
                           key={post.id}
-                          className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:shadow-md"
+                          className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition hover:shadow-md"
                         >
-                          <div className="flex flex-col gap-4 p-4">
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="min-w-0 flex-1">
-                                <h3 className="line-clamp-2 text-lg font-extrabold leading-6 text-gray-900">
-                                  {post.title}
-                                </h3>
-
-                                <p className="mt-1 line-clamp-1 text-sm text-gray-500">
-                                  /{post.slug}
-                                </p>
-
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                  <span
-                                    className={`inline-flex rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${
-                                      post.status === "published"
-                                        ? "bg-green-50 text-green-700"
-                                        : "bg-yellow-50 text-yellow-700"
-                                    }`}
-                                  >
-                                    {post.status}
-                                  </span>
-
-                                  {post.created_at ? (
-                                    <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
-                                      {new Date(post.created_at).toLocaleString("vi-VN")}
-                                    </span>
-                                  ) : null}
-                                </div>
-
-                                {post.content ? (
-                                  <p className="mt-3 line-clamp-2 text-sm leading-6 text-gray-600">
-                                    {post.content}
-                                  </p>
-                                ) : null}
-                              </div>
-
-                              <div className="flex shrink-0 gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => handleEdit(post)}
-                                  className="rounded-2xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700"
-                                >
-                                  Sửa
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => handleDelete(post)}
-                                  className="rounded-2xl border border-red-200 px-4 py-2 text-sm font-medium text-red-600"
-                                >
-                                  Xóa
-                                </button>
-                              </div>
-                            </div>
-
-                            {firstImage ? (
-                              <div className="overflow-hidden rounded-2xl border border-gray-100 bg-gray-50">
+                          <div className="flex gap-4">
+                            <div className="shrink-0">
+                              {firstImage ? (
                                 <img
                                   src={firstImage}
                                   alt={post.title}
-                                  className="h-32 w-full object-cover"
+                                  className="h-24 w-24 rounded-2xl object-cover"
                                 />
+                              ) : (
+                                <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-gray-100 text-xs font-bold uppercase tracking-wide text-gray-400">
+                                  No img
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                <div className="min-w-0 flex-1">
+                                  <h3 className="line-clamp-2 text-lg font-extrabold leading-6 text-gray-900">
+                                    {post.title}
+                                  </h3>
+
+                                  <p className="mt-1 line-clamp-1 text-sm text-gray-500">
+                                    /{post.slug}
+                                  </p>
+
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    <Badge tone={post.status === "published" ? "green" : "yellow"}>
+                                      {post.status}
+                                    </Badge>
+
+                                    {hasImages ? <Badge tone="blue">Ảnh</Badge> : null}
+                                    {hasVideos ? <Badge tone="purple">Video</Badge> : null}
+                                    {hasPopup ? <Badge tone="red">Popup</Badge> : null}
+                                    {hasSensitive ? <Badge tone="red">Nhạy cảm</Badge> : null}
+                                  </div>
+
+                                  {post.content ? (
+                                    <p className="mt-3 line-clamp-2 text-sm leading-6 text-gray-600">
+                                      {post.content}
+                                    </p>
+                                  ) : null}
+
+                                  {post.created_at ? (
+                                    <p className="mt-3 text-xs font-medium text-gray-500">
+                                      {new Date(post.created_at).toLocaleString("vi-VN")}
+                                    </p>
+                                  ) : null}
+                                </div>
+
+                                <div className="flex shrink-0 flex-wrap gap-2 md:justify-end">
+                                  <Link
+                                    href={`/${post.slug}`}
+                                    target="_blank"
+                                    className="rounded-2xl border border-blue-200 px-4 py-2 text-sm font-medium text-blue-700"
+                                  >
+                                    Xem bài
+                                  </Link>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEdit(post)}
+                                    className="rounded-2xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700"
+                                  >
+                                    Sửa
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDelete(post)}
+                                    className="rounded-2xl border border-red-200 px-4 py-2 text-sm font-medium text-red-600"
+                                  >
+                                    Xóa
+                                  </button>
+                                </div>
                               </div>
-                            ) : null}
+                            </div>
                           </div>
                         </div>
                       );
