@@ -53,6 +53,8 @@ type VideoItem = {
   sensitive: boolean;
 };
 
+const POSTS_PER_PAGE = 7;
+
 const inputClass =
   "w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none transition focus:border-red-300 focus:bg-white";
 
@@ -273,6 +275,7 @@ export default function AdminPage() {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [editingId, setEditingId] = useState<number | null>(null);
 
@@ -332,6 +335,10 @@ export default function AdminPage() {
     return () => URL.revokeObjectURL(objectUrl);
   }, [adImageFile]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter, posts.length]);
+
   async function loadPosts() {
     setFetchingPosts(true);
 
@@ -347,14 +354,18 @@ export default function AdminPage() {
       return;
     }
 
-    const normalized = (data || []).map((item: Omit<Post, "images" | "videos"> & {
-      images: unknown;
-      videos: unknown;
-    }) => ({
-      ...item,
-      images: safeParseImages(item.images),
-      videos: safeParseVideos(item.videos),
-    })) as Post[];
+    const normalized = (data || []).map(
+      (
+        item: Omit<Post, "images" | "videos"> & {
+          images: unknown;
+          videos: unknown;
+        }
+      ) => ({
+        ...item,
+        images: safeParseImages(item.images),
+        videos: safeParseVideos(item.videos),
+      })
+    ) as Post[];
 
     setPosts(normalized);
   }
@@ -771,6 +782,17 @@ export default function AdminPage() {
     });
   }, [posts, search, statusFilter]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredPosts.length / POSTS_PER_PAGE));
+  const pageStart = (currentPage - 1) * POSTS_PER_PAGE;
+  const pageEnd = currentPage * POSTS_PER_PAGE;
+  const paginatedPosts = filteredPosts.slice(pageStart, pageEnd);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
   if (loading) {
     return <main className="p-10">Đang tải...</main>;
   }
@@ -829,10 +851,10 @@ export default function AdminPage() {
                 ADMIN
               </div>
               <h1 className="mt-4 text-4xl font-extrabold tracking-tight text-gray-900 md:text-5xl">
-                CMS admin pro v1
+                CMS admin pro v2
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-gray-500">
-                Đăng bài, sửa bài, quản lý nhiều ảnh, video upload hoặc link X/Telegram và popup quảng cáo.
+                Đăng bài, sửa bài, quản lý media, đánh dấu nội dung nhạy cảm, phân trang bài viết và popup quảng cáo.
               </p>
             </div>
 
@@ -846,7 +868,7 @@ export default function AdminPage() {
           </div>
         </header>
 
-        <div className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
+        <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
           <div className="space-y-6">
             <div className={cardClass}>
               <div className="mb-5 flex items-center justify-between">
@@ -1182,11 +1204,11 @@ export default function AdminPage() {
 
           <div className="space-y-6">
             <div className={cardClass}>
-              <div className="mb-5 flex items-center justify-between gap-4">
+              <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div>
                   <h2 className="text-2xl font-extrabold text-gray-900">Danh sách bài viết</h2>
                   <p className="mt-1 text-sm text-gray-500">
-                    Tìm kiếm, lọc, sửa và xóa bài viết.
+                    Quản lý bài viết gọn hơn, mỗi trang 7 bài mới nhất.
                   </p>
                 </div>
 
@@ -1218,61 +1240,139 @@ export default function AdminPage() {
                 </select>
               </div>
 
+              <div className="mb-4 flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                <span>
+                  Tổng: <strong>{filteredPosts.length}</strong> bài
+                </span>
+                <span>
+                  Trang <strong>{currentPage}</strong> / <strong>{totalPages}</strong>
+                </span>
+              </div>
+
               {fetchingPosts ? (
                 <p className="text-gray-500">Đang tải bài viết...</p>
               ) : filteredPosts.length === 0 ? (
                 <p className="text-gray-500">Chưa có bài viết nào.</p>
               ) : (
-                <div className="space-y-4">
-                  {filteredPosts.map((post) => {
-                    const firstImage = post.images?.[0]?.url || "";
+                <>
+                  <div className="space-y-4">
+                    {paginatedPosts.map((post) => {
+                      const firstImage = post.images?.[0]?.url || "";
 
-                    return (
-                      <div key={post.id} className="rounded-2xl border border-gray-200 p-4">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0">
-                            <h3 className="truncate text-lg font-bold text-gray-900">
-                              {post.title}
-                            </h3>
-                            <p className="mt-1 text-sm text-gray-500">/{post.slug}</p>
-                            <p className="mt-2 text-sm text-gray-500">Trạng thái: {post.status}</p>
-                            {post.created_at ? (
-                              <p className="mt-1 text-sm text-gray-500">
-                                {new Date(post.created_at).toLocaleString("vi-VN")}
-                              </p>
+                      return (
+                        <div
+                          key={post.id}
+                          className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:shadow-md"
+                        >
+                          <div className="flex flex-col gap-4 p-4">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="min-w-0 flex-1">
+                                <h3 className="line-clamp-2 text-lg font-extrabold leading-6 text-gray-900">
+                                  {post.title}
+                                </h3>
+
+                                <p className="mt-1 line-clamp-1 text-sm text-gray-500">
+                                  /{post.slug}
+                                </p>
+
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  <span
+                                    className={`inline-flex rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${
+                                      post.status === "published"
+                                        ? "bg-green-50 text-green-700"
+                                        : "bg-yellow-50 text-yellow-700"
+                                    }`}
+                                  >
+                                    {post.status}
+                                  </span>
+
+                                  {post.created_at ? (
+                                    <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
+                                      {new Date(post.created_at).toLocaleString("vi-VN")}
+                                    </span>
+                                  ) : null}
+                                </div>
+
+                                {post.content ? (
+                                  <p className="mt-3 line-clamp-2 text-sm leading-6 text-gray-600">
+                                    {post.content}
+                                  </p>
+                                ) : null}
+                              </div>
+
+                              <div className="flex shrink-0 gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleEdit(post)}
+                                  className="rounded-2xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700"
+                                >
+                                  Sửa
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleDelete(post)}
+                                  className="rounded-2xl border border-red-200 px-4 py-2 text-sm font-medium text-red-600"
+                                >
+                                  Xóa
+                                </button>
+                              </div>
+                            </div>
+
+                            {firstImage ? (
+                              <div className="overflow-hidden rounded-2xl border border-gray-100 bg-gray-50">
+                                <img
+                                  src={firstImage}
+                                  alt={post.title}
+                                  className="h-32 w-full object-cover"
+                                />
+                              </div>
                             ) : null}
                           </div>
-
-                          <div className="flex shrink-0 gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleEdit(post)}
-                              className="rounded-2xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700"
-                            >
-                              Sửa
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => handleDelete(post)}
-                              className="rounded-2xl border border-red-200 px-4 py-2 text-sm font-medium text-red-600"
-                            >
-                              Xóa
-                            </button>
-                          </div>
                         </div>
+                      );
+                    })}
+                  </div>
 
-                        {firstImage ? (
-                          <img
-                            src={firstImage}
-                            alt={post.title}
-                            className="mt-4 h-44 w-full rounded-2xl object-cover"
-                          />
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
+                  {filteredPosts.length > POSTS_PER_PAGE ? (
+                    <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                        disabled={currentPage === 1}
+                        className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        ← Trước
+                      </button>
+
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                        <button
+                          key={page}
+                          type="button"
+                          onClick={() => setCurrentPage(page)}
+                          className={`rounded-xl px-4 py-2 text-sm font-semibold ${
+                            currentPage === page
+                              ? "bg-black text-white"
+                              : "border border-gray-300 bg-white text-gray-700"
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      ))}
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+                        }
+                        disabled={currentPage === totalPages}
+                        className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Sau →
+                      </button>
+                    </div>
+                  ) : null}
+                </>
               )}
             </div>
           </div>
