@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 type AdPopupProps = {
   postSlug: string;
@@ -11,7 +11,7 @@ type AdPopupProps = {
 };
 
 const MAX_DAILY_AD_CLICKS = 5;
-const STORAGE_KEY = "hb141_ad_click_limit_global";
+const STORAGE_KEY = "hb141_ad_popup_global_daily_limit";
 
 type AdState = {
   date: string;
@@ -59,65 +59,103 @@ function writeAdState(state: AdState) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-export default function AdPopup({ adLink }: AdPopupProps) {
+export default function AdPopup({
+  adLink,
+  adTitle,
+  adDesc,
+  adImage,
+}: AdPopupProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+
   useEffect(() => {
-    if (!adLink?.trim()) return;
+    setHydrated(true);
+
+    if (!adLink?.trim()) {
+      setIsOpen(false);
+      return;
+    }
 
     const state = readAdState();
 
-    // Đã đủ 5 lần trong ngày thì bỏ chặn hoàn toàn
-    if (state.clicks >= MAX_DAILY_AD_CLICKS) return;
+    // Nếu trong ngày đã click quảng cáo đủ 5 lần thì không hiện popup nữa
+    if (state.clicks >= MAX_DAILY_AD_CLICKS) {
+      setIsOpen(false);
+      return;
+    }
 
-    let redirected = false;
+    const timer = window.setTimeout(() => {
+      setIsOpen(true);
+    }, 900);
 
-    const handler = (event: MouseEvent) => {
-      if (redirected) return;
-
-      const target = event.target as HTMLElement | null;
-      if (!target) return;
-
-      // Cho phép click bình thường trong admin/devtools editable nếu có
-      const tagName = target.tagName?.toLowerCase();
-
-      // Không chặn click chuột phải / click phụ
-      if (event.button !== 0) return;
-
-      // Không chặn nếu user đang chọn text
-      const selection = window.getSelection?.()?.toString();
-      if (selection && selection.trim().length > 0) return;
-
-      // Không chặn các click vào control media có thể gây lỗi UX quá khó chịu
-      if (
-        tagName === "video" ||
-        tagName === "audio" ||
-        tagName === "source"
-      ) {
-        return;
-      }
-
-      event.preventDefault();
-      event.stopPropagation();
-
-      redirected = true;
-
-      const current = readAdState();
-      const nextClicks = current.clicks + 1;
-
-      writeAdState({
-        date: getTodayKey(),
-        clicks: nextClicks,
-      });
-
-      // Mở quảng cáo trên tab hiện tại để user có thể back lại
-      window.location.href = adLink;
-    };
-
-    document.addEventListener("click", handler, true);
-
-    return () => {
-      document.removeEventListener("click", handler, true);
-    };
+    return () => window.clearTimeout(timer);
   }, [adLink]);
 
-  return null;
+  const handleOpenAd = () => {
+    const current = readAdState();
+    const nextClicks = current.clicks + 1;
+
+    writeAdState({
+      date: getTodayKey(),
+      clicks: nextClicks,
+    });
+
+    setIsOpen(false);
+
+    // Mở trên tab hiện tại để người xem có thể back lại bài viết
+    window.location.href = adLink;
+  };
+
+  if (!hydrated || !isOpen || !adLink?.trim()) {
+    return null;
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4"
+      onClick={handleOpenAd}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          handleOpenAd();
+        }
+      }}
+    >
+      <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl">
+        <div className="px-6 py-6 text-center">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-red-500">
+            Quảng cáo
+          </p>
+
+          <h3 className="mt-3 text-3xl font-extrabold leading-tight text-red-600">
+            {adTitle?.trim() || "NỘI DUNG ĐÃ BỊ ẨN"}
+          </h3>
+
+          <p className="mt-6 text-lg font-semibold leading-8 text-gray-800">
+            {adDesc?.trim() ||
+              "Bạn cần click vào nội dung quảng cáo bên dưới để tiếp tục xem bài viết này."}
+          </p>
+
+          <p className="mt-6 text-3xl font-extrabold text-sky-700">
+            Click để xem 👉 MỞ QUẢNG CÁO
+          </p>
+
+          {adImage ? (
+            <div className="mt-6 overflow-hidden rounded-2xl border border-gray-100">
+              <img
+                src={adImage}
+                alt={adTitle?.trim() || "Quảng cáo"}
+                className="w-full object-cover"
+              />
+            </div>
+          ) : null}
+
+          <p className="mt-5 text-sm font-medium text-gray-500">
+            Chạm vào popup để mở quảng cáo và tiếp tục.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }
