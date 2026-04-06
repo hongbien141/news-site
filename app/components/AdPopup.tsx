@@ -10,12 +10,12 @@ type AdPopupProps = {
   adImage?: string | null;
 };
 
-const MAX_DAILY_AD_CLICKS = 5;
-const STORAGE_KEY = "hb141_ad_popup_global_daily_limit";
+const MAX_DAILY_AD_VIEWS = 5;
+const DAILY_STORAGE_KEY = "hb141_ad_daily_limit";
 
-type AdState = {
+type DailyAdState = {
   date: string;
-  clicks: number;
+  views: number;
 };
 
 function getTodayKey() {
@@ -26,40 +26,55 @@ function getTodayKey() {
   return `${y}-${m}-${d}`;
 }
 
-function readAdState(): AdState {
+function readDailyState(): DailyAdState {
   if (typeof window === "undefined") {
-    return { date: getTodayKey(), clicks: 0 };
+    return { date: getTodayKey(), views: 0 };
   }
 
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(DAILY_STORAGE_KEY);
     const today = getTodayKey();
 
     if (!raw) {
-      return { date: today, clicks: 0 };
+      return { date: today, views: 0 };
     }
 
-    const parsed = JSON.parse(raw) as Partial<AdState>;
+    const parsed = JSON.parse(raw) as Partial<DailyAdState>;
 
     if (parsed.date !== today) {
-      return { date: today, clicks: 0 };
+      return { date: today, views: 0 };
     }
 
     return {
       date: today,
-      clicks: Number(parsed.clicks || 0),
+      views: Number(parsed.views || 0),
     };
   } catch {
-    return { date: getTodayKey(), clicks: 0 };
+    return { date: getTodayKey(), views: 0 };
   }
 }
 
-function writeAdState(state: AdState) {
+function writeDailyState(state: DailyAdState) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  localStorage.setItem(DAILY_STORAGE_KEY, JSON.stringify(state));
+}
+
+function getUnlockedPostKey(postSlug: string) {
+  return `hb141_ad_unlocked_${postSlug}`;
+}
+
+function isPostUnlocked(postSlug: string) {
+  if (typeof window === "undefined") return false;
+  return sessionStorage.getItem(getUnlockedPostKey(postSlug)) === "1";
+}
+
+function unlockPost(postSlug: string) {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem(getUnlockedPostKey(postSlug), "1");
 }
 
 export default function AdPopup({
+  postSlug,
   adLink,
   adTitle,
   adDesc,
@@ -76,33 +91,43 @@ export default function AdPopup({
       return;
     }
 
-    const state = readAdState();
-
-    // Nếu trong ngày đã click quảng cáo đủ 5 lần thì không hiện popup nữa
-    if (state.clicks >= MAX_DAILY_AD_CLICKS) {
+    // Nếu bài này đã được mở khóa trong phiên hiện tại
+    // (ví dụ user đã bấm quảng cáo rồi back lại)
+    // thì không hiện popup nữa
+    if (isPostUnlocked(postSlug)) {
       setIsOpen(false);
       return;
     }
 
+    const dailyState = readDailyState();
+
+    // Nếu đã quá 5 lượt hiện quảng cáo trong ngày thì bỏ popup
+    if (dailyState.views >= MAX_DAILY_AD_VIEWS) {
+      setIsOpen(false);
+      return;
+    }
+
+    // Tăng số lượt bị popup trong ngày ngay khi vào bài
+    writeDailyState({
+      date: getTodayKey(),
+      views: dailyState.views + 1,
+    });
+
     const timer = window.setTimeout(() => {
       setIsOpen(true);
-    }, 900);
+    }, 700);
 
     return () => window.clearTimeout(timer);
-  }, [adLink]);
+  }, [adLink, postSlug]);
 
   const handleOpenAd = () => {
-    const current = readAdState();
-    const nextClicks = current.clicks + 1;
-
-    writeAdState({
-      date: getTodayKey(),
-      clicks: nextClicks,
-    });
+    // Đánh dấu bài này đã được mở khóa trong session
+    // để khi user back lại thì xem bài luôn
+    unlockPost(postSlug);
 
     setIsOpen(false);
 
-    // Mở trên tab hiện tại để người xem có thể back lại bài viết
+    // Mở quảng cáo trên tab hiện tại
     window.location.href = adLink;
   };
 
