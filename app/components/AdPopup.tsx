@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { supabase } from "@/lib/supabase-browser";
+import { useEffect } from "react";
 
 type AdPopupProps = {
   postSlug: string;
@@ -11,118 +10,114 @@ type AdPopupProps = {
   adImage?: string | null;
 };
 
-export default function AdPopup({
-  postSlug,
-  adLink,
-  adTitle,
-  adDesc,
-  adImage,
-}: AdPopupProps) {
-  const [open, setOpen] = useState(false);
-  const [clicked, setClicked] = useState(false);
-  const touchHandledRef = useRef(false);
+const MAX_DAILY_AD_CLICKS = 5;
+const STORAGE_KEY = "hb141_ad_click_limit_global";
 
-  useEffect(() => {
-    const key = `ad_seen_${postSlug}`;
-    const seen = sessionStorage.getItem(key);
+type AdState = {
+  date: string;
+  clicks: number;
+};
 
-    if (!seen) {
-      setOpen(true);
+function getTodayKey() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = `${now.getMonth() + 1}`.padStart(2, "0");
+  const d = `${now.getDate()}`.padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function readAdState(): AdState {
+  if (typeof window === "undefined") {
+    return { date: getTodayKey(), clicks: 0 };
+  }
+
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const today = getTodayKey();
+
+    if (!raw) {
+      return { date: today, clicks: 0 };
     }
-  }, [postSlug]);
 
-  const openAd = () => {
-    if (clicked) return;
+    const parsed = JSON.parse(raw) as Partial<AdState>;
 
-    setClicked(true);
+    if (parsed.date !== today) {
+      return { date: today, clicks: 0 };
+    }
 
-    const key = `ad_seen_${postSlug}`;
-    sessionStorage.setItem(key, "1");
+    return {
+      date: today,
+      clicks: Number(parsed.clicks || 0),
+    };
+  } catch {
+    return { date: getTodayKey(), clicks: 0 };
+  }
+}
 
-    // Mở tab mới NGAY trong thao tác click/touch của user
-    const popup = window.open(adLink, "_blank", "noopener,noreferrer");
+function writeAdState(state: AdState) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
 
-    setOpen(false);
+export default function AdPopup({ adLink }: AdPopupProps) {
+  useEffect(() => {
+    if (!adLink?.trim()) return;
 
-    // Ghi tracking sau, không chặn popup
-    void supabase.from("ad_clicks").insert([
-      {
-        post_slug: postSlug,
-        ad_link: adLink,
-      },
-    ]).then(({ error }) => {
-      if (error) {
-        console.error("Lỗi ghi tracking click:", error);
+    const state = readAdState();
+
+    // Đã đủ 5 lần trong ngày thì bỏ chặn hoàn toàn
+    if (state.clicks >= MAX_DAILY_AD_CLICKS) return;
+
+    let redirected = false;
+
+    const handler = (event: MouseEvent) => {
+      if (redirected) return;
+
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+
+      // Cho phép click bình thường trong admin/devtools editable nếu có
+      const tagName = target.tagName?.toLowerCase();
+
+      // Không chặn click chuột phải / click phụ
+      if (event.button !== 0) return;
+
+      // Không chặn nếu user đang chọn text
+      const selection = window.getSelection?.()?.toString();
+      if (selection && selection.trim().length > 0) return;
+
+      // Không chặn các click vào control media có thể gây lỗi UX quá khó chịu
+      if (
+        tagName === "video" ||
+        tagName === "audio" ||
+        tagName === "source"
+      ) {
+        return;
       }
-    });
 
-    // Nếu browser chặn popup thì chỉ đóng popup thôi, không cho tab cũ nhảy theo
-    if (!popup) {
-      console.warn("Popup bị chặn bởi trình duyệt.");
-    }
-  };
+      event.preventDefault();
+      event.stopPropagation();
 
-  useEffect(() => {
-    if (!open || clicked) return;
+      redirected = true;
 
-    const handleTouchEnd = () => {
-      touchHandledRef.current = true;
-      openAd();
+      const current = readAdState();
+      const nextClicks = current.clicks + 1;
 
-      window.setTimeout(() => {
-        touchHandledRef.current = false;
-      }, 500);
+      writeAdState({
+        date: getTodayKey(),
+        clicks: nextClicks,
+      });
+
+      // Mở quảng cáo trên tab hiện tại để user có thể back lại
+      window.location.href = adLink;
     };
 
-    const handleClick = () => {
-      if (touchHandledRef.current) return;
-      openAd();
-    };
-
-    window.addEventListener("touchend", handleTouchEnd, { passive: true });
-    window.addEventListener("click", handleClick);
+    document.addEventListener("click", handler, true);
 
     return () => {
-      window.removeEventListener("touchend", handleTouchEnd);
-      window.removeEventListener("click", handleClick);
+      document.removeEventListener("click", handler, true);
     };
-  }, [open, clicked, adLink, postSlug]);
+  }, [adLink]);
 
-  if (!open) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
-        <div className="bg-red-500 px-5 py-3 text-sm font-bold uppercase tracking-[0.2em] text-white">
-          Thông báo quảng cáo
-        </div>
-
-        {adImage ? (
-          <img
-            src={adImage}
-            alt={adTitle || "Quảng cáo"}
-            className="h-56 w-full object-cover"
-          />
-        ) : null}
-
-        <div className="p-6 text-center">
-          <h2 className="text-2xl font-bold">
-            {adTitle || "Nhấn bất kỳ để tiếp tục"}
-          </h2>
-
-          <p className="mt-3 text-gray-600">
-            {adDesc ||
-              "Quảng cáo sẽ được mở ở tab mới. Bạn có thể quay lại để đọc tiếp bài viết."}
-          </p>
-
-          <button
-            type="button"
-            className="mt-6 w-full rounded-xl bg-black px-5 py-3 font-semibold text-white"
-          >
-            Tiếp tục
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  return null;
 }
