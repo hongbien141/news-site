@@ -34,6 +34,10 @@ type Post = {
   ad_title?: string | null;
   ad_desc?: string | null;
   ad_image?: string | null;
+  popup_link_2?: string | null;
+  ad_title_2?: string | null;
+  ad_desc_2?: string | null;
+  ad_image_2?: string | null;
   created_at?: string;
 };
 
@@ -316,6 +320,12 @@ export default function AdminPage() {
   const [adImageFile, setAdImageFile] = useState<File | null>(null);
   const [adImagePreview, setAdImagePreview] = useState("");
   const [existingAdImage, setExistingAdImage] = useState("");
+  const [popupLink2, setPopupLink2] = useState("");
+  const [adTitle2, setAdTitle2] = useState("");
+  const [adDesc2, setAdDesc2] = useState("");
+  const [adImageFile2, setAdImageFile2] = useState<File | null>(null);
+  const [adImagePreview2, setAdImagePreview2] = useState("");
+  const [existingAdImage2, setExistingAdImage2] = useState("");
 
   const [images, setImages] = useState<ImageItem[]>([
     { file: null, preview: "", sensitive: false },
@@ -360,6 +370,18 @@ export default function AdminPage() {
 
     return () => URL.revokeObjectURL(objectUrl);
   }, [adImageFile]);
+
+  useEffect(() => {
+    if (!adImageFile2) {
+      setAdImagePreview2("");
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(adImageFile2);
+    setAdImagePreview2(objectUrl);
+
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [adImageFile2]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -428,6 +450,12 @@ export default function AdminPage() {
     setAdImageFile(null);
     setAdImagePreview("");
     setExistingAdImage("");
+    setPopupLink2("");
+    setAdTitle2("");
+    setAdDesc2("");
+    setAdImageFile2(null);
+    setAdImagePreview2("");
+    setExistingAdImage2("");
     setImages([{ file: null, preview: "", sensitive: false }]);
     setVideos([
       {
@@ -665,6 +693,11 @@ export default function AdminPage() {
     return uploadFile(adImageFile, "ads");
   }
 
+  async function uploadAdImage2IfNeeded() {
+    if (!adImageFile2) return existingAdImage2 || null;
+    return uploadFile(adImageFile2, "ads");
+  }
+
   async function handleSubmit() {
     if (!title.trim()) return alert("Bạn chưa nhập tiêu đề");
     if (!slug.trim()) return alert("Bạn chưa nhập slug");
@@ -672,11 +705,13 @@ export default function AdminPage() {
     setSubmitting(true);
 
     try {
-      const [uploadedImages, uploadedVideos, uploadedAdImage] = await Promise.all([
-        uploadImages(),
-        uploadVideos(),
-        uploadAdImageIfNeeded(),
-      ]);
+            const [uploadedImages, uploadedVideos, uploadedAdImage, uploadedAdImage2] =
+        await Promise.all([
+          uploadImages(),
+          uploadVideos(),
+          uploadAdImageIfNeeded(),
+          uploadAdImage2IfNeeded(),
+        ]);
 
       const payload = {
         title: title.trim(),
@@ -689,6 +724,10 @@ export default function AdminPage() {
         ad_title: adTitle.trim() || null,
         ad_desc: adDesc.trim() || null,
         ad_image: uploadedAdImage || null,
+        popup_link_2: popupLink2.trim() || null,
+        ad_title_2: adTitle2.trim() || null,
+        ad_desc_2: adDesc2.trim() || null,
+        ad_image_2: uploadedAdImage2 || null,
       };
 
       if (editingId) {
@@ -724,6 +763,12 @@ export default function AdminPage() {
     setExistingAdImage(post.ad_image || "");
     setAdImageFile(null);
     setAdImagePreview("");
+    setPopupLink2(post.popup_link_2 || "");
+    setAdTitle2(post.ad_title_2 || "");
+    setAdDesc2(post.ad_desc_2 || "");
+    setExistingAdImage2(post.ad_image_2 || "");
+    setAdImageFile2(null);
+    setAdImagePreview2("");
 
     setImages(
       post.images && post.images.length
@@ -1147,7 +1192,7 @@ export default function AdminPage() {
 
             <div className={cardClass}>
               <div className="mb-5">
-                <h2 className="text-2xl font-extrabold text-gray-900">Popup quảng cáo</h2>
+                <h2 className="text-2xl font-extrabold text-gray-900">Quảng cáo bước 1</h2>
                 <p className="mt-1 text-sm text-gray-500">
                   Dùng cho popup affiliate hoặc banner quảng cáo.
                 </p>
@@ -1217,6 +1262,79 @@ export default function AdminPage() {
                 </div>
               </div>
             </div>
+
+<div className={cardClass}>
+  <div className="mb-5">
+    <h2 className="text-2xl font-extrabold text-gray-900">Quảng cáo bước 2</h2>
+    <p className="mt-1 text-sm text-gray-500">
+      Sau khi người xem quay lại từ quảng cáo bước 1, chạm vào màn hình sẽ mở quảng cáo bước 2.
+    </p>
+  </div>
+
+  <div className="space-y-4">
+    <div>
+      <label className="mb-2 block text-sm font-semibold text-gray-800">
+        Link quảng cáo bước 2
+      </label>
+      <input
+        className={inputClass}
+        value={popupLink2}
+        onChange={(e) => setPopupLink2(e.target.value)}
+        placeholder="https://shopee.vn/product/..."
+      />
+    </div>
+
+    <div>
+      <label className="mb-2 block text-sm font-semibold text-gray-800">
+        Tiêu đề quảng cáo bước 2
+      </label>
+      <input
+        className={inputClass}
+        value={adTitle2}
+        onChange={(e) => setAdTitle2(e.target.value)}
+        placeholder="Nhập tiêu đề quảng cáo bước 2"
+      />
+    </div>
+
+    <div>
+      <label className="mb-2 block text-sm font-semibold text-gray-800">
+        Mô tả quảng cáo bước 2
+      </label>
+      <textarea
+        className="min-h-[110px] w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none transition focus:border-red-300 focus:bg-white"
+        value={adDesc2}
+        onChange={(e) => setAdDesc2(e.target.value)}
+        placeholder="Nhập mô tả quảng cáo bước 2"
+      />
+    </div>
+
+    <div>
+      <label className="mb-2 block text-sm font-semibold text-gray-800">
+        Ảnh quảng cáo bước 2
+      </label>
+      <input
+        type="file"
+        accept="image/*"
+        onChange={(e) => setAdImageFile2(e.target.files?.[0] || null)}
+        className="w-full"
+      />
+
+      {adImagePreview2 ? (
+        <img
+          src={adImagePreview2}
+          alt="Preview quảng cáo bước 2"
+          className="mt-4 h-56 w-full rounded-2xl object-cover"
+        />
+      ) : existingAdImage2 ? (
+        <img
+          src={existingAdImage2}
+          alt="Quảng cáo bước 2 hiện tại"
+          className="mt-4 h-56 w-full rounded-2xl object-cover"
+        />
+      ) : null}
+    </div>
+  </div>
+</div>
 
             <button
               type="button"
