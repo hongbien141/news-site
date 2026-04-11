@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type AdPopupProps = {
   postSlug: string;
@@ -8,14 +8,24 @@ type AdPopupProps = {
   adTitle?: string | null;
   adDesc?: string | null;
   adImage?: string | null;
+
+  adLink2?: string | null;
+  adTitle2?: string | null;
+  adDesc2?: string | null;
+  adImage2?: string | null;
 };
 
 const MAX_DAILY_AD_VIEWS = 5;
-const DAILY_STORAGE_KEY = "hb141_ad_daily_limit";
+const DAILY_STORAGE_KEY = "hb141_ad_daily_limit_v2";
 
 type DailyAdState = {
   date: string;
   views: number;
+};
+
+type PostAdStageState = {
+  stage1Done: boolean;
+  stage2Done: boolean;
 };
 
 function getTodayKey() {
@@ -59,18 +69,34 @@ function writeDailyState(state: DailyAdState) {
   localStorage.setItem(DAILY_STORAGE_KEY, JSON.stringify(state));
 }
 
-function getUnlockedPostKey(postSlug: string) {
-  return `hb141_ad_unlocked_${postSlug}`;
+function getStageKey(postSlug: string) {
+  return `hb141_ad_stage_${postSlug}`;
 }
 
-function isPostUnlocked(postSlug: string) {
-  if (typeof window === "undefined") return false;
-  return sessionStorage.getItem(getUnlockedPostKey(postSlug)) === "1";
+function readStageState(postSlug: string): PostAdStageState {
+  if (typeof window === "undefined") {
+    return { stage1Done: false, stage2Done: false };
+  }
+
+  try {
+    const raw = sessionStorage.getItem(getStageKey(postSlug));
+    if (!raw) {
+      return { stage1Done: false, stage2Done: false };
+    }
+
+    const parsed = JSON.parse(raw) as Partial<PostAdStageState>;
+    return {
+      stage1Done: !!parsed.stage1Done,
+      stage2Done: !!parsed.stage2Done,
+    };
+  } catch {
+    return { stage1Done: false, stage2Done: false };
+  }
 }
 
-function unlockPost(postSlug: string) {
+function writeStageState(postSlug: string, state: PostAdStageState) {
   if (typeof window === "undefined") return;
-  sessionStorage.setItem(getUnlockedPostKey(postSlug), "1");
+  sessionStorage.setItem(getStageKey(postSlug), JSON.stringify(state));
 }
 
 export default function AdPopup({
@@ -79,9 +105,11 @@ export default function AdPopup({
   adTitle,
   adDesc,
   adImage,
+  adLink2,
 }: AdPopupProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const stage2BoundRef = useRef(false);
 
   useEffect(() => {
     setHydrated(true);
@@ -91,43 +119,66 @@ export default function AdPopup({
       return;
     }
 
-    // Nếu bài này đã được mở khóa trong phiên hiện tại
-    // (ví dụ user đã bấm quảng cáo rồi back lại)
-    // thì không hiện popup nữa
-    if (isPostUnlocked(postSlug)) {
-      setIsOpen(false);
-      return;
-    }
-
     const dailyState = readDailyState();
 
-    // Nếu đã quá 5 lượt hiện quảng cáo trong ngày thì bỏ popup
     if (dailyState.views >= MAX_DAILY_AD_VIEWS) {
       setIsOpen(false);
       return;
     }
 
-    // Tăng số lượt bị popup trong ngày ngay khi vào bài
-    writeDailyState({
-      date: getTodayKey(),
-      views: dailyState.views + 1,
+    const stageState = readStageState(postSlug);
+
+    // Nếu chưa mở quảng cáo 1 thì hiện popup 1
+    if (!stageState.stage1Done) {
+      writeDailyState({
+        date: getTodayKey(),
+        views: dailyState.views + 1,
+      });
+
+      const timer = window.setTimeout(() => {
+        setIsOpen(true);
+      }, 700);
+
+      return () => window.clearTimeout(timer);
+    }
+
+    // Nếu đã mở quảng cáo 1 nhưng chưa mở quảng cáo 2
+    // thì khi user back lại, chỉ cần chạm 1 lần sẽ mở quảng cáo 2
+    if (stageState.stage1Done && !stageState.stage2Done && adLink2?.trim()) {
+      if (stage2BoundRef.current) return;
+      stage2BoundRef.current = true;
+
+      const handleStage2Click = (event: MouseEvent) => {
+        const latestStage = readStageState(postSlug);
+        if (latestStage.stage2Done) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        writeStageState(postSlug, {
+          stage1Done: true,
+          stage2Done: true,
+        });
+
+        window.location.href = adLink2;
+      };
+
+      document.addEventListener("click", handleStage2Click, true);
+
+      return () => {
+        document.removeEventListener("click", handleStage2Click, true);
+        stage2BoundRef.current = false;
+      };
+    }
+  }, [postSlug, adLink, adLink2]);
+
+  const handleOpenAd1 = () => {
+    writeStageState(postSlug, {
+      stage1Done: true,
+      stage2Done: false,
     });
 
-    const timer = window.setTimeout(() => {
-      setIsOpen(true);
-    }, 700);
-
-    return () => window.clearTimeout(timer);
-  }, [adLink, postSlug]);
-
-  const handleOpenAd = () => {
-    // Đánh dấu bài này đã được mở khóa trong session
-    // để khi user back lại thì xem bài luôn
-    unlockPost(postSlug);
-
     setIsOpen(false);
-
-    // Mở quảng cáo trên tab hiện tại
     window.location.href = adLink;
   };
 
@@ -138,12 +189,12 @@ export default function AdPopup({
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4"
-      onClick={handleOpenAd}
+      onClick={handleOpenAd1}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
-          handleOpenAd();
+          handleOpenAd1();
         }
       }}
     >
@@ -177,7 +228,7 @@ export default function AdPopup({
           ) : null}
 
           <p className="mt-5 text-sm font-medium text-gray-500">
-            Chạm vào popup để mở quảng cáo và tiếp tục.
+            Sau khi quay lại, chạm màn hình một lần nữa để tiếp tục.
           </p>
         </div>
       </div>
