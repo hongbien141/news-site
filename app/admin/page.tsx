@@ -1280,7 +1280,7 @@ export default function AdminPage() {
         className={inputClass}
         value={popupLink2}
         onChange={(e) => setPopupLink2(e.target.value)}
-        placeholder="https://shopee.vn/product/..."
+        placeholder="https://www.tiktok.com/view/product/..."
       />
     </div>
 
