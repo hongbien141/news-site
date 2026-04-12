@@ -12,7 +12,7 @@ type AdPopupProps = {
   adLink2?: string | null;
 };
 
-const MAX_DAILY_AD_VIEWS = 5;
+const MAX_DAILY_AD_VIEWS = 10;
 const DAILY_STORAGE_KEY = "hb141_ad_daily_limit_v2";
 
 type DailyAdState = {
