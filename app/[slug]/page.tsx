@@ -243,9 +243,6 @@ export default async function PostDetailPage({ params }: PageProps) {
     adDesc={post.ad_desc}
     adImage={post.ad_image}
     adLink2={post.popup_link_2}
-    adTitle2={post.ad_title_2}
-    adDesc2={post.ad_desc_2}
-    adImage2={post.ad_image_2}
   />
 ) : null}
 

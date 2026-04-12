@@ -10,9 +10,6 @@ type AdPopupProps = {
   adImage?: string | null;
 
   adLink2?: string | null;
-  adTitle2?: string | null;
-  adDesc2?: string | null;
-  adImage2?: string | null;
 };
 
 const MAX_DAILY_AD_VIEWS = 5;
