@@ -9,7 +9,7 @@ const beVietnam = Be_Vietnam_Pro({
 
 const siteName = "Hóng Biến 141";
 const siteUrl = "https://hongbien141.io.vn";
-const defaultOgImage = `${siteUrl}/og-default.png`;
+const defaultOgImage = `${siteUrl}/og-default-v2.png`;
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

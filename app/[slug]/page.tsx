@@ -38,7 +38,7 @@ type AdjacentPost = {
 
 const siteName = "Hóng Biến 141";
 const siteUrl = "https://hongbien141.io.vn";
-const defaultOgImage = `${siteUrl}/og-default.png`;
+const defaultOgImage = `${siteUrl}/og-default-v2.png`;
 
 function safeParseImages(value: unknown): ImagePayload[] {
   if (!value) return [];
