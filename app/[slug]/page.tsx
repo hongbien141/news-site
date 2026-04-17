@@ -330,14 +330,14 @@ export default async function PostDetailPage({ params }: PageProps) {
 
           <div className="mt-10 border-t border-gray-300 pt-8 text-center">
             <p className="text-xl font-semibold text-gray-900">
-              Group Tele:{" "}
+              Kênh Telegram:{" "}
               <a
                 href="https://t.me/hongbien141"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="underline hover:text-red-600"
               >
-                tham gia
+                Tham gia
               </a>{" "}
               – Fanpage FB:{" "}
               <a
@@ -346,7 +346,7 @@ export default async function PostDetailPage({ params }: PageProps) {
                 rel="noopener noreferrer"
                 className="underline hover:text-red-600"
               >
-                tham gia
+                Truy cập
               </a>
             </p>
 
