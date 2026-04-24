@@ -15,7 +15,7 @@ export default function HomePage() {
 
           <div className="relative flex h-32 w-32 animate-bounce items-center justify-center overflow-hidden rounded-[30px] bg-gradient-to-br from-sky-400 to-sky-600 shadow-2xl shadow-sky-300/60 transition group-hover:scale-105">
             <img
-              src="/telegram.png"
+              src="/telegram.svg"
               alt="Telegram"
               className="h-20 w-20 object-contain drop-shadow-md transition group-hover:scale-110"
             />
