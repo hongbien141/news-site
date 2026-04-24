@@ -5,7 +5,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabase";
-import AdPopup from "../components/AdPopup";
+import AdGate from "../components/AdGate";
 import SensitiveMedia from "../components/SensitiveMedia";
 
 type PageProps = {
@@ -235,16 +235,6 @@ export default async function PostDetailPage({ params }: PageProps) {
 
   return (
     <main className="min-h-screen bg-[#f5f3ef] text-[#111]">
-      {post.popup_link ? (
-  <AdPopup
-    postSlug={post.slug}
-    adLink={post.popup_link}
-    adTitle={post.ad_title}
-    adDesc={post.ad_desc}
-    adImage={post.ad_image}
-    adLink2={post.popup_link_2}
-  />
-) : null}
 
       <div className="mx-auto max-w-4xl px-4 py-10 md:px-6">
         <p className="mb-4 text-sm font-bold uppercase tracking-[0.2em] text-red-500">
@@ -261,7 +251,15 @@ export default async function PostDetailPage({ params }: PageProps) {
 
         <div className="mt-6 border-t border-gray-300" />
 
-        <div className="mt-8 rounded-2xl bg-white p-5 shadow-sm">
+        <AdGate
+  postSlug={post.slug}
+  adLink={post.popup_link}
+  adTitle={post.ad_title}
+  adDesc={post.ad_desc}
+  adImage={post.ad_image}
+>
+  <div className="mt-8 rounded-2xl bg-white p-5 shadow-sm">
+
           <div className="space-y-5 whitespace-pre-line text-lg leading-8 text-gray-800">
             {post.content}
           </div>
@@ -398,6 +396,7 @@ export default async function PostDetailPage({ params }: PageProps) {
             </div>
           ) : null}
         </div>
+        </AdGate>
       </div>
     </main>
   );
