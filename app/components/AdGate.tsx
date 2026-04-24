@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type AdGateProps = {
   postSlug: string;
@@ -11,8 +11,40 @@ type AdGateProps = {
   children: React.ReactNode;
 };
 
-function getUnlockKey(postSlug: string) {
-  return `hb141_content_unlocked_${postSlug}`;
+const TELEGRAM_URL = "https://t.me/hongbien141";
+
+type GateState = {
+  step1Done: boolean;
+  step2Done: boolean;
+};
+
+function getGateKey(postSlug: string) {
+  return `hb141_adgate_${postSlug}`;
+}
+
+function readGateState(postSlug: string): GateState {
+  if (typeof window === "undefined") {
+    return { step1Done: false, step2Done: false };
+  }
+
+  try {
+    const raw = sessionStorage.getItem(getGateKey(postSlug));
+    if (!raw) return { step1Done: false, step2Done: false };
+
+    const parsed = JSON.parse(raw) as Partial<GateState>;
+
+    return {
+      step1Done: !!parsed.step1Done,
+      step2Done: !!parsed.step2Done,
+    };
+  } catch {
+    return { step1Done: false, step2Done: false };
+  }
+}
+
+function writeGateState(postSlug: string, state: GateState) {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem(getGateKey(postSlug), JSON.stringify(state));
 }
 
 export default function AdGate({
@@ -23,27 +55,68 @@ export default function AdGate({
   adImage,
   children,
 }: AdGateProps) {
-  const [unlocked, setUnlocked] = useState(false);
+  const [gateState, setGateState] = useState<GateState>({
+    step1Done: false,
+    step2Done: false,
+  });
   const [ready, setReady] = useState(false);
+  const telegramBoundRef = useRef(false);
 
   useEffect(() => {
-    const isUnlocked = sessionStorage.getItem(getUnlockKey(postSlug)) === "1";
-    setUnlocked(isUnlocked);
+    const currentState = readGateState(postSlug);
+    setGateState(currentState);
     setReady(true);
   }, [postSlug]);
 
-  const openAd = () => {
-    if (!adLink) return;
+  useEffect(() => {
+    if (!ready) return;
 
-    sessionStorage.setItem(getUnlockKey(postSlug), "1");
-    setUnlocked(true);
+    // Chỉ bật click màn hình mở Telegram SAU KHI đã click link quảng cáo bước 1
+    if (!gateState.step1Done || gateState.step2Done) return;
 
-    window.location.href = adLink;
+    if (telegramBoundRef.current) return;
+    telegramBoundRef.current = true;
+
+    const handleOpenTelegram = (event: MouseEvent) => {
+      const latestState = readGateState(postSlug);
+
+      if (!latestState.step1Done || latestState.step2Done) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const nextState = {
+        step1Done: true,
+        step2Done: true,
+      };
+
+      writeGateState(postSlug, nextState);
+      setGateState(nextState);
+
+      window.open(TELEGRAM_URL, "_blank", "noopener,noreferrer");
+    };
+
+    document.addEventListener("click", handleOpenTelegram, true);
+
+    return () => {
+      document.removeEventListener("click", handleOpenTelegram, true);
+      telegramBoundRef.current = false;
+    };
+  }, [ready, gateState.step1Done, gateState.step2Done, postSlug]);
+
+  const handleClickStep1 = () => {
+    const nextState = {
+      step1Done: true,
+      step2Done: false,
+    };
+
+    writeGateState(postSlug, nextState);
+    setGateState(nextState);
   };
 
   if (!ready) return null;
 
-  if (!adLink || unlocked) {
+  if (!adLink || gateState.step1Done) {
     return <>{children}</>;
   }
 
@@ -56,34 +129,32 @@ export default function AdGate({
       <div className="absolute inset-0 z-20 flex items-start justify-center bg-white/95 px-4 py-8">
         <div className="w-full max-w-3xl rounded-2xl border border-gray-200 bg-white p-6 text-center shadow-sm">
           <h2 className="text-4xl font-extrabold text-red-600">
-            {adTitle?.trim() || "NỘI DUNG ĐÃ BỊ ẨN"}
+            {adTitle?.trim() || "VIDEO Ở BÊN DƯỚI QUẢNG CÁO"}
           </h2>
 
           <p className="mt-6 text-lg font-semibold leading-8 text-gray-900">
             {adDesc?.trim() ||
-              "Bạn cần click vào liên kết quảng cáo màu xanh bên dưới👇 để xem nội dung bài viết này."}
+              "CLICK VÀO LINK QUẢNG CÁO MÀU XANH BÊN DƯỚI👇 SAU ĐÓ F5 TRANG ĐỂ TIẾP TỤC XEM."}
           </p>
 
-          <button
-            type="button"
-            onClick={openAd}
-            className="mt-7 text-2xl font-extrabold text-sky-700 hover:text-red-600"
+          <a
+            href={adLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={handleClickStep1}
+            className="mt-7 inline-block text-2xl font-extrabold text-sky-700 hover:text-red-600"
           >
-            Click Để Xem 👉 MỞ ỨNG DỤNG SHOPEE
-          </button>
+            Link Quảng Cáo Giấy Ăn Topgia 👉 CLICK MỞ ỨNG DỤNG SHOPEE
+          </a>
 
           {adImage ? (
-            <button
-              type="button"
-              onClick={openAd}
-              className="mt-7 block w-full overflow-hidden rounded-xl"
-            >
+            <div className="mt-7 overflow-hidden rounded-xl">
               <img
                 src={adImage}
                 alt={adTitle?.trim() || "Quảng cáo"}
                 className="w-full object-cover"
               />
-            </button>
+            </div>
           ) : null}
         </div>
       </div>
