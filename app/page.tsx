@@ -1,141 +1,27 @@
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-import Link from "next/link";
-import { createSupabaseServer } from "@/lib/supabase";
-
-type ImagePayload = {
-  url: string;
-  sensitive?: boolean;
-};
-
-type Post = {
-  id: number;
-  title: string;
-  slug: string;
-  content: string | null;
-  images: string | null;
-  status: string | null;
-  created_at: string;
-};
-
-function parseImages(value: unknown): ImagePayload[] {
-  if (!value) return [];
-
-  const normalize = (item: unknown): ImagePayload | null => {
-    if (typeof item === "string") {
-      return { url: item, sensitive: false };
-    }
-
-    if (
-      item &&
-      typeof item === "object" &&
-      "url" in item &&
-      typeof (item as { url?: unknown }).url === "string"
-    ) {
-      const typed = item as { url: string; sensitive?: boolean };
-      return {
-        url: typed.url,
-        sensitive: !!typed.sensitive,
-      };
-    }
-
-    return null;
-  };
-
-  if (Array.isArray(value)) {
-    return value.map(normalize).filter((item): item is ImagePayload => !!item);
-  }
-
-  if (typeof value === "string") {
-    try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed)
-        ? parsed.map(normalize).filter((item): item is ImagePayload => !!item)
-        : [];
-    } catch {
-      return [];
-    }
-  }
-
-  return [];
-}
-
-export default async function HomePage() {
-  const supabase = createSupabaseServer();
-
-  const { data: posts, error } = await supabase
-    .from("posts")
-    .select("*")
-    .eq("status", "published")
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    return (
-      <main className="min-h-screen bg-[#f5f3ef] p-10 text-red-600">
-        Lỗi tải bài viết: {error.message}
-      </main>
-    );
-  }
-
+export default function HomePage() {
   return (
-    <main className="min-h-screen bg-[#f5f3ef] text-[#111]">
-      <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">
-        <p className="text-sm font-bold uppercase tracking-[0.2em] text-red-500">
-          Tin tức mới
-        </p>
+    <main className="flex min-h-screen items-center justify-center bg-[#f5f3ef] px-4 text-[#111]">
+      <a
+        href="https://t.me/hongbien141"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="group flex flex-col items-center text-center"
+      >
+        <div className="flex h-32 w-32 items-center justify-center rounded-full bg-sky-500 text-6xl font-extrabold text-white shadow-xl transition group-hover:scale-105">
+          ✈
+        </div>
 
-        <h1 className="mt-4 text-5xl font-extrabold tracking-tight md:text-7xl">
+        <h1 className="mt-6 text-4xl font-extrabold">
           Hóng Biến 141
         </h1>
 
-        <p className="mt-4 text-2xl text-gray-600">Danh sách bài viết mới nhất</p>
-
-        <div className="mt-10 space-y-7">
-          {posts && posts.length > 0 ? (
-            posts.map((post: Post) => {
-              const images = parseImages(post.images);
-              const thumbnail = images[0]?.url || "";
-
-              return (
-                <Link
-                  key={post.id}
-                  href={`/${post.slug}`}
-                  className="block rounded-[28px] bg-white p-5 shadow-sm transition hover:shadow-md"
-                >
-                  <div className="flex flex-col gap-5 md:flex-row">
-                    {thumbnail ? (
-                      <img
-                        src={thumbnail}
-                        alt={post.title}
-                        className="h-56 w-full rounded-2xl object-cover md:w-[260px]"
-                      />
-                    ) : (
-                      <div className="h-56 w-full rounded-2xl bg-gray-200 md:w-[260px]" />
-                    )}
-
-                    <div className="flex flex-1 flex-col justify-center">
-                      <h2 className="text-3xl font-extrabold">{post.title}</h2>
-
-                      <p className="mt-4 line-clamp-2 text-2xl text-gray-600">
-                        {post.content || ""}
-                      </p>
-
-                      <p className="mt-6 text-xl text-gray-400">
-                        {new Date(post.created_at).toLocaleDateString("vi-VN")}
-                      </p>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })
-          ) : (
-            <div className="rounded-2xl bg-white p-6 text-gray-500 shadow-sm">
-              Chưa có bài viết nào.
-            </div>
-          )}
-        </div>
-      </div>
+        <p className="mt-3 text-xl font-semibold text-sky-600 underline">
+          Tham gia kênh Telegram
+        </p>
+      </a>
     </main>
   );
 }
