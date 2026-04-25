@@ -126,7 +126,7 @@ export default function AdGate({
   onClick={handleClickStep1}
   className="mx-auto mt-5 inline-flex max-w-full items-center justify-center rounded-2xl bg-sky-600 px-4 py-3 text-base font-extrabold leading-6 text-white shadow-md transition hover:bg-red-600 sm:mt-7 sm:text-2xl"
 >
-  👉Mở quảng cáo Shopee
+  👉MỞ ỨNG DỤNG SHOPEE
 </a>
 
           {adImage ? (
