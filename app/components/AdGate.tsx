@@ -120,14 +120,12 @@ export default function AdGate({
           </p>
 
           <a
-            href={adLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={handleClickStep1}
-            className="mx-auto mt-5 inline-flex max-w-full items-center justify-center rounded-2xl bg-sky-600 px-4 py-3 text-base font-extrabold leading-6 text-white shadow-md transition hover:bg-red-600 sm:mt-7 sm:text-2xl"
-          >
-            👉Mở quảng cáo Shopee
-          </a>
+  href={adLink}
+  onClick={handleClickStep1}
+  className="mx-auto mt-5 inline-flex max-w-full items-center justify-center rounded-2xl bg-sky-600 px-4 py-3 text-base font-extrabold leading-6 text-white shadow-md transition hover:bg-red-600 sm:mt-7 sm:text-2xl"
+>
+  👉Mở quảng cáo Shopee
+</a>
 
           {adImage ? (
             <div className="mt-5 overflow-hidden rounded-2xl border border-gray-100 sm:mt-7">
