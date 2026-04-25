@@ -162,7 +162,7 @@ export default function AdGate({
           ) : null}
 
           <p className="mt-4 text-xs font-medium leading-5 text-gray-500 sm:text-sm">
-            Sau khi mở quảng cáo, F5 trang để tiếp tục xem.
+            Sau khi mở quảng cáo, quay lại trang để tiếp tục xem.
           </p>
         </div>
       </div>
