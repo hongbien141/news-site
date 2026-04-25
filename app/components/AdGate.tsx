@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 type AdGateProps = {
   postSlug: string;
@@ -11,40 +11,54 @@ type AdGateProps = {
   children: React.ReactNode;
 };
 
-const TELEGRAM_URL = "https://t.me/hongbien141";
+function getEndOfTodayTimestamp() {
+  const now = new Date();
+
+  return new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() + 1,
+    0,
+    0,
+    0,
+    0
+  ).getTime();
+}
 
 type GateState = {
-  step1Done: boolean;
-  step2Done: boolean;
+  unlockedUntil: number;
 };
 
 function getGateKey(postSlug: string) {
-  return `hb141_adgate_${postSlug}`;
+  return `hb141_adgate_24h_${postSlug}`;
 }
 
 function readGateState(postSlug: string): GateState {
   if (typeof window === "undefined") {
-    return { step1Done: false, step2Done: false };
+    return { unlockedUntil: 0 };
   }
 
   try {
-    const raw = sessionStorage.getItem(getGateKey(postSlug));
-    if (!raw) return { step1Done: false, step2Done: false };
+    const raw = localStorage.getItem(getGateKey(postSlug));
+    if (!raw) return { unlockedUntil: 0 };
 
     const parsed = JSON.parse(raw) as Partial<GateState>;
 
     return {
-      step1Done: !!parsed.step1Done,
-      step2Done: !!parsed.step2Done,
+      unlockedUntil: Number(parsed.unlockedUntil || 0),
     };
   } catch {
-    return { step1Done: false, step2Done: false };
+    return { unlockedUntil: 0 };
   }
 }
 
 function writeGateState(postSlug: string, state: GateState) {
   if (typeof window === "undefined") return;
-  sessionStorage.setItem(getGateKey(postSlug), JSON.stringify(state));
+  localStorage.setItem(getGateKey(postSlug), JSON.stringify(state));
+}
+
+function isUnlocked(state: GateState) {
+  return state.unlockedUntil > Date.now();
 }
 
 export default function AdGate({
@@ -56,11 +70,10 @@ export default function AdGate({
   children,
 }: AdGateProps) {
   const [gateState, setGateState] = useState<GateState>({
-    step1Done: false,
-    step2Done: false,
+    unlockedUntil: 0,
   });
+
   const [ready, setReady] = useState(false);
-  const telegramBoundRef = useRef(false);
 
   useEffect(() => {
     const currentState = readGateState(postSlug);
@@ -68,47 +81,12 @@ export default function AdGate({
     setReady(true);
   }, [postSlug]);
 
-  useEffect(() => {
-    if (!ready) return;
-
-    // Chỉ bật click màn hình mở Telegram SAU KHI đã click link quảng cáo bước 1
-    if (!gateState.step1Done || gateState.step2Done) return;
-
-    if (telegramBoundRef.current) return;
-    telegramBoundRef.current = true;
-
-    const handleOpenTelegram = (event: MouseEvent) => {
-      const latestState = readGateState(postSlug);
-
-      if (!latestState.step1Done || latestState.step2Done) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-
-      const nextState = {
-        step1Done: true,
-        step2Done: true,
-      };
-
-      writeGateState(postSlug, nextState);
-      setGateState(nextState);
-
-      window.open(TELEGRAM_URL, "_blank", "noopener,noreferrer");
-    };
-
-    document.addEventListener("click", handleOpenTelegram, true);
-
-    return () => {
-      document.removeEventListener("click", handleOpenTelegram, true);
-      telegramBoundRef.current = false;
-    };
-  }, [ready, gateState.step1Done, gateState.step2Done, postSlug]);
+  const unlocked = isUnlocked(gateState);
 
   const handleClickStep1 = () => {
     const nextState = {
-      step1Done: true,
-      step2Done: false,
-    };
+  unlockedUntil: getEndOfTodayTimestamp(),
+};
 
     writeGateState(postSlug, nextState);
     setGateState(nextState);
@@ -116,11 +94,11 @@ export default function AdGate({
 
   if (!ready) return null;
 
-  if (!adLink || gateState.step1Done) {
+  if (!adLink || unlocked) {
     return <>{children}</>;
   }
 
-    return (
+  return (
     <div className="relative">
       <div className="pointer-events-none select-none opacity-10 blur-[1px]">
         {children}
@@ -138,7 +116,7 @@ export default function AdGate({
 
           <p className="mx-auto mt-4 max-w-xl text-base font-semibold leading-7 text-gray-800 sm:mt-6 sm:text-lg sm:leading-8">
             {adDesc?.trim() ||
-              "Click liên kết quảng cáo màu xanh bên dưới 👇 để mở khoá nội dung."}
+              "Click vào liên kết quảng cáo màu xanh bên dưới 👇 để mở khoá nội dung."}
           </p>
 
           <a
@@ -148,7 +126,7 @@ export default function AdGate({
             onClick={handleClickStep1}
             className="mx-auto mt-5 inline-flex max-w-full items-center justify-center rounded-2xl bg-sky-600 px-4 py-3 text-base font-extrabold leading-6 text-white shadow-md transition hover:bg-red-600 sm:mt-7 sm:text-2xl"
           >
-          👉MỞ ỨNG DỤNG SHOPEE
+            👉Mở quảng cáo Shopee
           </a>
 
           {adImage ? (
@@ -162,7 +140,7 @@ export default function AdGate({
           ) : null}
 
           <p className="mt-4 text-xs font-medium leading-5 text-gray-500 sm:text-sm">
-            Sau khi mở quảng cáo, quay lại trang để tiếp tục xem.
+            Sau khi mở quảng cáo, quay lại trang này để tiếp tục xem.
           </p>
         </div>
       </div>

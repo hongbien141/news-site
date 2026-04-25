@@ -308,32 +308,85 @@ export default async function PostDetailPage({ params }: PageProps) {
           ) : null}
 
           <div className="mt-10 border-t border-gray-300 pt-8 text-center">
-            <p className="text-xl font-semibold text-gray-900">
-              Kênh Telegram:{" "}
-              <a
-                href="https://t.me/hongbien141"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline hover:text-red-600"
-              >
-                Tham gia
-              </a>{" "}
-              – Fanpage FB:{" "}
-              <a
-                href="https://www.facebook.com/hongbien141"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline hover:text-red-600"
-              >
-                Truy cập
-              </a>
-            </p>
+  <p className="text-sm font-bold uppercase tracking-[0.22em] text-red-500">
+    Theo dõi cộng đồng
+  </p>
 
-            <p className="mx-auto mt-6 max-w-4xl text-center text-2xl font-extrabold italic leading-10 text-red-600">
-              Bài viết chỉ mang tính chất giải trí, truyền tải thông tin HOẶC lên án – cảnh báo về
-              những hành vi chưa chuẩn mực, không cổ súy hành động theo, cảm ơn!
-            </p>
-          </div>
+  <h2 className="mt-3 text-2xl font-extrabold text-gray-900 md:text-3xl">
+    Tham gia kênh để hóng biến nhanh nhất
+  </h2>
+
+  <div className="mt-7 grid gap-4 md:grid-cols-2">
+    <a
+      href="https://t.me/hongbien141"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="group relative overflow-hidden rounded-3xl border border-sky-200 bg-gradient-to-br from-sky-50 to-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-xl"
+    >
+      <div className="absolute -right-10 -top-10 h-28 w-28 animate-pulse rounded-full bg-sky-300/30" />
+
+      <div className="relative flex flex-col items-center">
+        <div className="flex h-20 w-20 animate-bounce items-center justify-center rounded-[24px] bg-gradient-to-br from-sky-400 to-sky-600 shadow-lg shadow-sky-300/50">
+          <img
+            src="/Telegram_logo.svg"
+            alt="Telegram"
+            className="h-12 w-12 object-contain drop-shadow-md transition group-hover:scale-110"
+          />
+        </div>
+
+        <h3 className="mt-4 text-xl font-extrabold text-gray-900">
+          Kênh Telegram
+        </h3>
+
+        <p className="mt-2 text-sm font-medium leading-6 text-gray-600">
+          Nhận tin mới nhanh hơn, xem không quảng cáo.
+        </p>
+
+        <span className="mt-4 inline-flex rounded-full bg-sky-600 px-5 py-2 text-sm font-bold text-white transition group-hover:bg-red-600">
+          Tham gia ngay
+        </span>
+      </div>
+    </a>
+
+    <a
+      href="https://www.facebook.com/hongbien141"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="group relative overflow-hidden rounded-3xl border border-blue-200 bg-gradient-to-br from-blue-50 to-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-xl"
+    >
+      <div className="absolute -right-10 -top-10 h-28 w-28 animate-pulse rounded-full bg-blue-300/30" />
+
+      <div className="relative flex flex-col items-center">
+        <div className="flex h-20 w-20 animate-bounce items-center justify-center rounded-[24px] bg-gradient-to-br from-blue-500 to-blue-700 shadow-lg shadow-blue-300/50">
+          <img
+            src="/facebook_logo.svg"
+            alt="Facebook"
+            className="h-12 w-12 object-contain drop-shadow-md transition group-hover:scale-110"
+          />
+        </div>
+
+        <h3 className="mt-4 text-xl font-extrabold text-gray-900">
+          Fanpage Facebook
+        </h3>
+
+        <p className="mt-2 text-sm font-medium leading-6 text-gray-600">
+          Theo dõi fanpage để cập nhật bài viết mới.
+        </p>
+
+        <span className="mt-4 inline-flex rounded-full bg-blue-600 px-5 py-2 text-sm font-bold text-white transition group-hover:bg-red-600">
+          Theo dõi ngay
+        </span>
+      </div>
+    </a>
+  </div>
+
+  <div className="mx-auto mt-8 max-w-3xl rounded-2xl border border-red-100 bg-red-50/60 px-4 py-4 text-center">
+  <p className="text-sm font-semibold italic leading-6 text-red-600 sm:text-base sm:leading-7">
+    Bài viết chỉ mang tính chất giải trí, truyền tải thông tin hoặc lên án – cảnh báo về
+    những hành vi chưa chuẩn mực, không cổ súy hành động theo. Cảm ơn!
+  </p>
+</div>
+</div>
 
         </div>
         </AdGate>
