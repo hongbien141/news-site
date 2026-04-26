@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 
+const DEFAULT_AD_IMAGE = "/shopee-default.png";
+
 type AdPopupProps = {
   postSlug: string;
   adLink: string;
   adTitle?: string | null;
   adDesc?: string | null;
-  adImage?: string | null;
 };
 
 type PopupState = {
@@ -76,7 +77,6 @@ export default function AdPopup({
   adLink,
   adTitle,
   adDesc,
-  adImage,
 }: AdPopupProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
@@ -93,7 +93,7 @@ export default function AdPopup({
       return;
     }
 
-    if (!adLink?.trim() || !adImage?.trim()) {
+    if (!adLink?.trim()) {
       setIsOpen(false);
       return;
     }
@@ -110,7 +110,7 @@ export default function AdPopup({
     }, 500);
 
     return () => window.clearTimeout(timer);
-  }, [postSlug, adLink, adImage]);
+  }, [postSlug, adLink]);
 
   const hideUntilEndOfDay = () => {
     writePopupState(postSlug, {
@@ -135,9 +135,9 @@ export default function AdPopup({
     window.location.href = adLink;
   };
 
-  if (!hydrated || !isFbApp || !isOpen || !adLink?.trim() || !adImage?.trim()) {
-    return null;
-  }
+  if (!hydrated || !isFbApp || !isOpen || !adLink?.trim()) {
+  return null;
+}
 
   return (
     <div
@@ -162,10 +162,10 @@ export default function AdPopup({
 
       <div className="max-h-[82vh] max-w-[92vw] overflow-hidden rounded-md">
         <img
-          src={adImage}
-          alt={adTitle?.trim() || adDesc?.trim() || "Quảng cáo"}
-          className="max-h-[82vh] max-w-[92vw] object-contain"
-        />
+  src={DEFAULT_AD_IMAGE}
+  alt="Quảng cáo Shopee"
+  className="max-h-[82vh] max-w-[92vw] object-contain"
+/>
       </div>
     </div>
   );

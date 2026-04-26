@@ -222,7 +222,6 @@ export default async function PostDetailPage({ params }: PageProps) {
   adLink={post.popup_link}
   adTitle={post.ad_title}
   adDesc={post.ad_desc}
-  adImage={post.ad_image}
 />
 ) : null}
       <div className="mx-auto max-w-4xl px-4 py-10 md:px-6">
