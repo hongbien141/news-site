@@ -216,13 +216,13 @@ export default async function PostDetailPage({ params }: PageProps) {
 
   return (
     <main className="min-h-screen bg-[#f5f3ef] text-[#111]">
-{post.popup_link && post.ad_image ? (
+{post.popup_link ? (
   <AdPopup
-  postSlug={post.slug}
-  adLink={post.popup_link}
-  adTitle={post.ad_title}
-  adDesc={post.ad_desc}
-/>
+    postSlug={post.slug}
+    adLink={post.popup_link}
+    adTitle={post.ad_title}
+    adDesc={post.ad_desc}
+  />
 ) : null}
       <div className="mx-auto max-w-4xl px-4 py-10 md:px-6">
         <p className="mb-4 text-sm font-bold uppercase tracking-[0.2em] text-red-500">

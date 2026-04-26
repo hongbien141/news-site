@@ -161,9 +161,9 @@ export default function AdPopup({
       </button>
 
       <div className="max-h-[82vh] max-w-[92vw] overflow-hidden rounded-md">
-        <img
+       <img
   src={DEFAULT_AD_IMAGE}
-  alt="Quảng cáo Shopee"
+  alt={adTitle?.trim() || adDesc?.trim() || "Quảng cáo"}
   className="max-h-[82vh] max-w-[92vw] object-contain"
 />
       </div>
