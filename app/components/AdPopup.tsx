@@ -153,7 +153,6 @@ export default function AdPopup({
     >
       <button
         type="button"
-        onClick={closePopup}
         className="absolute right-4 top-4 z-[10000] flex h-12 w-12 items-center justify-center rounded-full bg-black/80 text-4xl font-light leading-none text-white shadow-lg"
         aria-label="Đóng quảng cáo"
       >
