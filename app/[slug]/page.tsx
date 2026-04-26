@@ -5,7 +5,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabase";
-import AdGate from "../components/AdGate";
+import AdPopup from "../components/AdPopup";
 import SensitiveMedia from "../components/SensitiveMedia";
 
 type PageProps = {
@@ -216,7 +216,13 @@ export default async function PostDetailPage({ params }: PageProps) {
 
   return (
     <main className="min-h-screen bg-[#f5f3ef] text-[#111]">
-
+{post.popup_link && post.ad_image ? (
+  <AdPopup
+    postSlug={post.slug}
+    adLink={post.popup_link}
+    adImage={post.ad_image}
+  />
+) : null}
       <div className="mx-auto max-w-4xl px-4 py-10 md:px-6">
         <p className="mb-4 text-sm font-bold uppercase tracking-[0.2em] text-red-500">
           Tin tức
@@ -232,13 +238,12 @@ export default async function PostDetailPage({ params }: PageProps) {
 
         <div className="mt-6 border-t border-gray-300" />
 
-        <AdGate
   postSlug={post.slug}
   adLink={post.popup_link}
   adTitle={post.ad_title}
   adDesc={post.ad_desc}
   adImage={post.ad_image}
->
+
   <div className="mt-8 rounded-2xl bg-white p-5 shadow-sm">
 
           <div className="space-y-5 whitespace-pre-line text-lg leading-8 text-gray-800">
@@ -389,7 +394,6 @@ export default async function PostDetailPage({ params }: PageProps) {
 </div>
 
         </div>
-        </AdGate>
       </div>
     </main>
   );
