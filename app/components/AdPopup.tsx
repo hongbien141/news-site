@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-const DEFAULT_AD_IMAGE = "/shopee-default.png";
+const AD_IMAGE_STEP_1 = "/shopee-default.png";
+const AD_IMAGE_STEP_2 = "/tiktok-default.png";
 
 type AdPopupProps = {
   postSlug: string;
   adLink: string;
+  adLink2?: string | null;
   adTitle?: string | null;
   adDesc?: string | null;
 };
@@ -14,6 +16,8 @@ type AdPopupProps = {
 type PopupState = {
   hiddenUntil: number;
 };
+
+type PopupStep = 1 | 2;
 
 function isFacebookMobileApp() {
   if (typeof navigator === "undefined") return false;
@@ -39,17 +43,17 @@ function getEndOfTodayTimestamp() {
   ).getTime();
 }
 
-function getPopupKey(postSlug: string) {
-  return `hb141_adpopup_until_end_day_${postSlug}`;
+function getPopupKey(postSlug: string, step: PopupStep) {
+  return `hb141_adpopup_until_end_day_${postSlug}_${step}`;
 }
 
-function readPopupState(postSlug: string): PopupState {
+function readPopupState(postSlug: string, step: PopupStep): PopupState {
   if (typeof window === "undefined") {
     return { hiddenUntil: 0 };
   }
 
   try {
-    const raw = localStorage.getItem(getPopupKey(postSlug));
+    const raw = localStorage.getItem(getPopupKey(postSlug, step));
     if (!raw) return { hiddenUntil: 0 };
 
     const parsed = JSON.parse(raw) as Partial<PopupState>;
@@ -62,10 +66,14 @@ function readPopupState(postSlug: string): PopupState {
   }
 }
 
-function writePopupState(postSlug: string, state: PopupState) {
+function writePopupState(
+  postSlug: string,
+  step: PopupStep,
+  state: PopupState
+) {
   if (typeof window === "undefined") return;
 
-  localStorage.setItem(getPopupKey(postSlug), JSON.stringify(state));
+  localStorage.setItem(getPopupKey(postSlug, step), JSON.stringify(state));
 }
 
 function isHiddenToday(state: PopupState) {
@@ -75,12 +83,52 @@ function isHiddenToday(state: PopupState) {
 export default function AdPopup({
   postSlug,
   adLink,
+  adLink2,
   adTitle,
   adDesc,
 }: AdPopupProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [isFbApp, setIsFbApp] = useState(false);
+  const [step, setStep] = useState<PopupStep | null>(null);
+
+  const getNextPopupStep = useCallback((): PopupStep | null => {
+    const link1 = adLink?.trim();
+    const link2 = adLink2?.trim();
+
+    if (link1 && !isHiddenToday(readPopupState(postSlug, 1))) {
+      return 1;
+    }
+
+    if (link2 && !isHiddenToday(readPopupState(postSlug, 2))) {
+      return 2;
+    }
+
+    return null;
+  }, [postSlug, adLink, adLink2]);
+
+  const checkAndOpenPopup = useCallback(() => {
+    if (!isFacebookMobileApp()) {
+      setIsOpen(false);
+      setStep(null);
+      return;
+    }
+
+    const nextStep = getNextPopupStep();
+
+    if (!nextStep) {
+      setIsOpen(false);
+      setStep(null);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setStep(nextStep);
+      setIsOpen(true);
+    }, 500);
+
+    return () => window.clearTimeout(timer);
+  }, [getNextPopupStep]);
 
   useEffect(() => {
     setHydrated(true);
@@ -90,30 +138,28 @@ export default function AdPopup({
 
     if (!fbMobile) {
       setIsOpen(false);
+      setStep(null);
       return;
     }
 
-    if (!adLink?.trim()) {
-      setIsOpen(false);
-      return;
-    }
+    const cleanup = checkAndOpenPopup();
 
-    const popupState = readPopupState(postSlug);
+    const handleFocus = () => {
+      checkAndOpenPopup();
+    };
 
-    if (isHiddenToday(popupState)) {
-      setIsOpen(false);
-      return;
-    }
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("pageshow", handleFocus);
 
-    const timer = window.setTimeout(() => {
-      setIsOpen(true);
-    }, 500);
+    return () => {
+      cleanup?.();
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("pageshow", handleFocus);
+    };
+  }, [checkAndOpenPopup]);
 
-    return () => window.clearTimeout(timer);
-  }, [postSlug, adLink]);
-
-  const hideUntilEndOfDay = () => {
-    writePopupState(postSlug, {
+  const hideUntilEndOfDay = (popupStep: PopupStep) => {
+    writePopupState(postSlug, popupStep, {
       hiddenUntil: getEndOfTodayTimestamp(),
     });
   };
@@ -122,22 +168,28 @@ export default function AdPopup({
     event.preventDefault();
     event.stopPropagation();
 
-    hideUntilEndOfDay();
+    if (step) {
+      hideUntilEndOfDay(step);
+    }
+
     setIsOpen(false);
   };
 
   const openAd = () => {
-    if (!adLink?.trim()) return;
+    if (!step) return;
 
-    hideUntilEndOfDay();
+    const currentAdLink = step === 1 ? adLink?.trim() : adLink2?.trim();
+    if (!currentAdLink) return;
+
+    hideUntilEndOfDay(step);
     setIsOpen(false);
 
-    window.open(adLink, "_blank", "noopener,noreferrer");
+    window.open(currentAdLink, "_blank", "noopener,noreferrer");
   };
 
-  if (!hydrated || !isFbApp || !isOpen || !adLink?.trim()) {
-  return null;
-}
+  if (!hydrated || !isFbApp || !isOpen || !step) {
+    return null;
+  }
 
   return (
     <div
@@ -160,11 +212,11 @@ export default function AdPopup({
       </button>
 
       <div className="max-h-[82vh] max-w-[92vw] overflow-hidden rounded-md">
-       <img
-  src={DEFAULT_AD_IMAGE}
-  alt={adTitle?.trim() || adDesc?.trim() || "Quảng cáo"}
-  className="max-h-[82vh] max-w-[92vw] object-contain"
-/>
+        <img
+          src={step === 1 ? AD_IMAGE_STEP_1 : AD_IMAGE_STEP_2}
+          alt={adTitle?.trim() || adDesc?.trim() || "Quảng cáo"}
+          className="max-h-[82vh] max-w-[92vw] object-contain"
+        />
       </div>
     </div>
   );
