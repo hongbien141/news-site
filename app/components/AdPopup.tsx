@@ -102,24 +102,23 @@ export default function AdPopup({
   }, [postSlug, adLink, adLink2]);
 
   const checkAndOpenPopup = useCallback(() => {
-    if (!isFacebookMobileApp()) {
-      setIsOpen(false);
-      return;
-    }
+  if (!isFacebookMobileApp()) {
+    setIsOpen(false);
+    setStep(null);
+    return;
+  }
 
-    const nextStep = getNextPopupStep();
+  const nextStep = getNextPopupStep();
 
-    if (!nextStep) {
-      setIsOpen(false);
-      setStep(null);
-      return;
-    }
+  if (!nextStep) {
+    setIsOpen(false);
+    setStep(null);
+    return;
+  }
 
-    window.setTimeout(() => {
-      setStep(nextStep);
-      setIsOpen(true);
-    }, 500);
-  }, [getNextPopupStep]);
+  setStep(nextStep);
+  setIsOpen(true);
+}, [getNextPopupStep]);
 
   useEffect(() => {
   setHydrated(true);
