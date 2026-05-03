@@ -131,25 +131,25 @@ export default function AdPopup({
   checkAndOpenPopup();
 
   const handlePageShow = () => {
-    const nextStep = getNextPopupStep();
-
-    if (!nextStep) {
-      setIsOpen(false);
-      setStep(null);
-      return;
-    }
-
     checkAndOpenPopup();
+  };
+
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === "visible") {
+      checkAndOpenPopup();
+    }
   };
 
   window.addEventListener("pageshow", handlePageShow);
   window.addEventListener("focus", handlePageShow);
+  document.addEventListener("visibilitychange", handleVisibilityChange);
 
   return () => {
     window.removeEventListener("pageshow", handlePageShow);
     window.removeEventListener("focus", handlePageShow);
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
   };
-}, [checkAndOpenPopup, getNextPopupStep]);
+}, [checkAndOpenPopup]);
 
   const hideUntilEndOfDay = (popupStep: PopupStep) => {
     writePopupState(postSlug, popupStep, {
@@ -169,16 +169,22 @@ export default function AdPopup({
   };
 
   const openAd = () => {
-    if (!step) return;
+  if (!step) return;
 
-    const currentAdLink = step === 1 ? adLink?.trim() : adLink2?.trim();
-    if (!currentAdLink) return;
+  const currentAdLink = step === 1 ? adLink?.trim() : adLink2?.trim();
+  if (!currentAdLink) return;
 
-    hideUntilEndOfDay(step);
-    setIsOpen(false);
-    setStep(null);
+  hideUntilEndOfDay(step);
 
-   window.open(currentAdLink, "_blank", "noopener,noreferrer");
+  setIsOpen(false);
+  setStep(null);
+
+  window.open(currentAdLink, "_blank", "noopener,noreferrer");
+
+  // ⚠️ ép re-check sau khi user quay lại
+  setTimeout(() => {
+    checkAndOpenPopup();
+  }, 500);
 };
 
   if (!hydrated || !isFbApp || !isOpen || !step) {
