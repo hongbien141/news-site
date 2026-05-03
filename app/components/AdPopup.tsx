@@ -48,9 +48,7 @@ function getPopupKey(postSlug: string, step: PopupStep) {
 }
 
 function readPopupState(postSlug: string, step: PopupStep): PopupState {
-  if (typeof window === "undefined") {
-    return { hiddenUntil: 0 };
-  }
+  if (typeof window === "undefined") return { hiddenUntil: 0 };
 
   try {
     const raw = localStorage.getItem(getPopupKey(postSlug, step));
@@ -66,11 +64,7 @@ function readPopupState(postSlug: string, step: PopupStep): PopupState {
   }
 }
 
-function writePopupState(
-  postSlug: string,
-  step: PopupStep,
-  state: PopupState
-) {
+function writePopupState(postSlug: string, step: PopupStep, state: PopupState) {
   if (typeof window === "undefined") return;
 
   localStorage.setItem(getPopupKey(postSlug, step), JSON.stringify(state));
@@ -110,7 +104,6 @@ export default function AdPopup({
   const checkAndOpenPopup = useCallback(() => {
     if (!isFacebookMobileApp()) {
       setIsOpen(false);
-      setStep(null);
       return;
     }
 
@@ -122,12 +115,10 @@ export default function AdPopup({
       return;
     }
 
-    const timer = window.setTimeout(() => {
+    window.setTimeout(() => {
       setStep(nextStep);
       setIsOpen(true);
     }, 500);
-
-    return () => window.clearTimeout(timer);
   }, [getNextPopupStep]);
 
   useEffect(() => {
@@ -136,25 +127,20 @@ export default function AdPopup({
     const fbMobile = isFacebookMobileApp();
     setIsFbApp(fbMobile);
 
-    if (!fbMobile) {
-      setIsOpen(false);
-      setStep(null);
-      return;
-    }
+    if (!fbMobile) return;
 
-    const cleanup = checkAndOpenPopup();
+    checkAndOpenPopup();
 
-    const handleFocus = () => {
+    const handlePageShow = () => {
       checkAndOpenPopup();
     };
 
-    window.addEventListener("focus", handleFocus);
-    window.addEventListener("pageshow", handleFocus);
+    window.addEventListener("pageshow", handlePageShow);
+    window.addEventListener("focus", handlePageShow);
 
     return () => {
-      cleanup?.();
-      window.removeEventListener("focus", handleFocus);
-      window.removeEventListener("pageshow", handleFocus);
+      window.removeEventListener("pageshow", handlePageShow);
+      window.removeEventListener("focus", handlePageShow);
     };
   }, [checkAndOpenPopup]);
 
@@ -184,8 +170,7 @@ export default function AdPopup({
     hideUntilEndOfDay(step);
     setIsOpen(false);
 
-    window.open(currentAdLink, "_blank", "noopener,noreferrer");
-  };
+    window.open(currentAdLink, "_blank", "noopener,noreferrer"); };
 
   if (!hydrated || !isFbApp || !isOpen || !step) {
     return null;
