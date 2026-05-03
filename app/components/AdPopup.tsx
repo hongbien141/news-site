@@ -179,6 +179,7 @@ export default function AdPopup({
     setIsOpen(false);
 
    window.open(currentAdLink, "_blank", "noopener,noreferrer");
+};
 
   if (!hydrated || !isFbApp || !isOpen || !step) {
     return null;
