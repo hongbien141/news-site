@@ -176,6 +176,7 @@ export default function AdPopup({
 
     hideUntilEndOfDay(step);
     setIsOpen(false);
+    setStep(null);
 
    window.open(currentAdLink, "_blank", "noopener,noreferrer");
 };
