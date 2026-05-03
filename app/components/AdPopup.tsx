@@ -122,27 +122,35 @@ export default function AdPopup({
   }, [getNextPopupStep]);
 
   useEffect(() => {
-    setHydrated(true);
+  setHydrated(true);
 
-    const fbMobile = isFacebookMobileApp();
-    setIsFbApp(fbMobile);
+  const fbMobile = isFacebookMobileApp();
+  setIsFbApp(fbMobile);
 
-    if (!fbMobile) return;
+  if (!fbMobile) return;
+
+  checkAndOpenPopup();
+
+  const handlePageShow = () => {
+    const nextStep = getNextPopupStep();
+
+    if (!nextStep) {
+      setIsOpen(false);
+      setStep(null);
+      return;
+    }
 
     checkAndOpenPopup();
+  };
 
-    const handlePageShow = () => {
-      checkAndOpenPopup();
-    };
+  window.addEventListener("pageshow", handlePageShow);
+  window.addEventListener("focus", handlePageShow);
 
-    window.addEventListener("pageshow", handlePageShow);
-    window.addEventListener("focus", handlePageShow);
-
-    return () => {
-      window.removeEventListener("pageshow", handlePageShow);
-      window.removeEventListener("focus", handlePageShow);
-    };
-  }, [checkAndOpenPopup]);
+  return () => {
+    window.removeEventListener("pageshow", handlePageShow);
+    window.removeEventListener("focus", handlePageShow);
+  };
+}, [checkAndOpenPopup, getNextPopupStep]);
 
   const hideUntilEndOfDay = (popupStep: PopupStep) => {
     writePopupState(postSlug, popupStep, {
@@ -170,8 +178,7 @@ export default function AdPopup({
     hideUntilEndOfDay(step);
     setIsOpen(false);
 
-   window.location.href = currentAdLink;
-  };
+   window.open(currentAdLink, "_blank", "noopener,noreferrer");
 
   if (!hydrated || !isFbApp || !isOpen || !step) {
     return null;
