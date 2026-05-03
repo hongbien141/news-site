@@ -170,7 +170,8 @@ export default function AdPopup({
     hideUntilEndOfDay(step);
     setIsOpen(false);
 
-    window.open(currentAdLink, "_blank", "noopener,noreferrer"); };
+   window.location.href = currentAdLink;
+  };
 
   if (!hydrated || !isFbApp || !isOpen || !step) {
     return null;
