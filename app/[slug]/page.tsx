@@ -159,7 +159,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 
   const images = safeParseImages(post.images);
-  const firstImage = defaultOgImage;
+const firstImage =
+  images.find((image) => image.url && !image.sensitive)?.url || defaultOgImage;
   const title = post.title || siteName;
   const description =
     (post.content || "").replace(/\s+/g, " ").trim().slice(0, 180) ||
