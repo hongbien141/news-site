@@ -159,8 +159,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 
   const images = safeParseImages(post.images);
-const firstImage =
-  images.find((image) => image.url && !image.sensitive)?.url || defaultOgImage;
+const firstImage = defaultOgImage;
   const title = post.title || siteName;
   const description =
     (post.content || "").replace(/\s+/g, " ").trim().slice(0, 180) ||
@@ -187,7 +186,7 @@ const firstImage =
       ],
     },
     twitter: {
-      card: "summary_large_image",
+      card: "summary",
       title,
       description,
       images: [firstImage],
